@@ -80,6 +80,7 @@ export declare class TicketsService {
         organizacionId: string;
         sucursalId: string;
         createdAt: Date;
+        usuarioId: string | null;
         folio: string;
         subtotal: import("@prisma/client/runtime/library").Decimal;
         impuesto: import("@prisma/client/runtime/library").Decimal;
@@ -87,7 +88,6 @@ export declare class TicketsService {
         metodoPago: string;
         terminalId: string | null;
         clienteId: string | null;
-        usuarioId: string | null;
     })[]>;
     findOne(id: string): Promise<{
         sucursal: {
@@ -165,6 +165,7 @@ export declare class TicketsService {
         organizacionId: string;
         sucursalId: string;
         createdAt: Date;
+        usuarioId: string | null;
         folio: string;
         subtotal: import("@prisma/client/runtime/library").Decimal;
         impuesto: import("@prisma/client/runtime/library").Decimal;
@@ -172,7 +173,6 @@ export declare class TicketsService {
         metodoPago: string;
         terminalId: string | null;
         clienteId: string | null;
-        usuarioId: string | null;
     }>;
     cambiarEstado(id: string, nuevoEstado: 'DEVUELTO' | 'CANCELADO', motivo?: string): Promise<{
         cliente: {
@@ -219,6 +219,7 @@ export declare class TicketsService {
         organizacionId: string;
         sucursalId: string;
         createdAt: Date;
+        usuarioId: string | null;
         folio: string;
         subtotal: import("@prisma/client/runtime/library").Decimal;
         impuesto: import("@prisma/client/runtime/library").Decimal;
@@ -226,6 +227,5 @@ export declare class TicketsService {
         metodoPago: string;
         terminalId: string | null;
         clienteId: string | null;
-        usuarioId: string | null;
     }>;
 }

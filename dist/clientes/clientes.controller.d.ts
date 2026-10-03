@@ -52,6 +52,7 @@ export declare class ClientesController {
             organizacionId: string;
             sucursalId: string;
             createdAt: Date;
+            usuarioId: string | null;
             folio: string;
             subtotal: import("@prisma/client/runtime/library").Decimal;
             impuesto: import("@prisma/client/runtime/library").Decimal;
@@ -59,7 +60,6 @@ export declare class ClientesController {
             metodoPago: string;
             terminalId: string | null;
             clienteId: string | null;
-            usuarioId: string | null;
         })[];
     } & {
         nombre: string;

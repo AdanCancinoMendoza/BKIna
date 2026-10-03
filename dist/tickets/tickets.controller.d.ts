@@ -78,6 +78,7 @@ export declare class TicketsController {
         organizacionId: string;
         sucursalId: string;
         createdAt: Date;
+        usuarioId: string | null;
         folio: string;
         subtotal: import("@prisma/client/runtime/library").Decimal;
         impuesto: import("@prisma/client/runtime/library").Decimal;
@@ -85,7 +86,6 @@ export declare class TicketsController {
         metodoPago: string;
         terminalId: string | null;
         clienteId: string | null;
-        usuarioId: string | null;
     })[]>;
     findOne(id: string): Promise<{
         sucursal: {
@@ -163,6 +163,7 @@ export declare class TicketsController {
         organizacionId: string;
         sucursalId: string;
         createdAt: Date;
+        usuarioId: string | null;
         folio: string;
         subtotal: import("@prisma/client/runtime/library").Decimal;
         impuesto: import("@prisma/client/runtime/library").Decimal;
@@ -170,7 +171,6 @@ export declare class TicketsController {
         metodoPago: string;
         terminalId: string | null;
         clienteId: string | null;
-        usuarioId: string | null;
     }>;
     cambiarEstado(id: string, estado: 'DEVUELTO' | 'CANCELADO', motivo?: string): Promise<{
         cliente: {
@@ -217,6 +217,7 @@ export declare class TicketsController {
         organizacionId: string;
         sucursalId: string;
         createdAt: Date;
+        usuarioId: string | null;
         folio: string;
         subtotal: import("@prisma/client/runtime/library").Decimal;
         impuesto: import("@prisma/client/runtime/library").Decimal;
@@ -224,6 +225,5 @@ export declare class TicketsController {
         metodoPago: string;
         terminalId: string | null;
         clienteId: string | null;
-        usuarioId: string | null;
     }>;
 }
