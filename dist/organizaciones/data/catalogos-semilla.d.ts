@@ -1,15 +1,24 @@
+export type TipoCodigoArticulo = "EAN" | "PLU" | "INTERNO" | "SIN_CODIGO";
 export interface ArticuloSemilla {
     codigo: string;
+    tipoCodigo?: TipoCodigoArticulo;
     nombre: string;
+    subfamilia?: string;
     descripcion?: string;
     precioCompra: number;
     precioVenta: number;
     unidad: string;
     stockInicial: number;
 }
+export interface SubfamiliaSemilla {
+    nombre: string;
+    descripcion?: string;
+    articulos: ArticuloSemilla[];
+}
 export interface FamiliaSemilla {
     nombre: string;
     descripcion: string;
+    subfamilias?: SubfamiliaSemilla[];
     articulos: ArticuloSemilla[];
 }
 export interface CatalogoPais {

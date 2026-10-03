@@ -30,12 +30,12 @@ export declare class ClientesService {
                     createdAt: Date;
                     updatedAt: Date;
                     descripcion: string | null;
+                    familiaId: string | null;
                     codigo: string;
                     precioCompra: import("@prisma/client/runtime/library").Decimal;
                     precioVenta: import("@prisma/client/runtime/library").Decimal;
                     unidad: string;
                     imagen: string | null;
-                    familiaId: string | null;
                     subfamiliaId: string | null;
                 };
             } & {

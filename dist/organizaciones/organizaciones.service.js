@@ -122,16 +122,33 @@ let OrganizacionesService = class OrganizacionesService {
                             descripcion: fam.descripcion,
                         },
                     });
+                    const subfamiliasMap = new Map();
                     for (const art of fam.articulos) {
+                        let subfamiliaId = null;
+                        if (art.subfamilia) {
+                            const subfamKey = art.subfamilia.trim();
+                            if (!subfamiliasMap.has(subfamKey)) {
+                                const subfamCreada = await tx.subfamilia.create({
+                                    data: {
+                                        familiaId: familiaCreada.id,
+                                        nombre: subfamKey,
+                                        descripcion: `Subcategoría de ${fam.nombre}`,
+                                    },
+                                });
+                                subfamiliasMap.set(subfamKey, subfamCreada.id);
+                            }
+                            subfamiliaId = subfamiliasMap.get(subfamKey) || null;
+                        }
                         const articuloCreado = await tx.articulo.create({
                             data: {
                                 organizacionId: organizacion.id,
                                 familiaId: familiaCreada.id,
+                                subfamiliaId: subfamiliaId,
                                 codigo: art.codigo,
                                 nombre: art.nombre,
                                 descripcion: art.descripcion || null,
-                                precioCompra: art.precioCompra,
-                                precioVenta: art.precioVenta,
+                                precioCompra: 0,
+                                precioVenta: 0,
                                 unidad: art.unidad || 'Pieza',
                                 activo: true,
                             },
@@ -140,9 +157,9 @@ let OrganizacionesService = class OrganizacionesService {
                             data: {
                                 sucursalId: sucursal.id,
                                 articuloId: articuloCreado.id,
-                                stockActual: art.stockInicial || 20,
-                                stockMinimo: 5,
-                                stockMaximo: 100,
+                                stockActual: 0,
+                                stockMinimo: 0,
+                                stockMaximo: 0,
                             },
                         });
                         articulosPrecargadosCount++;
