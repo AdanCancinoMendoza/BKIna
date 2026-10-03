@@ -16,10 +16,12 @@ export declare class RegistroOrganizacionDto {
     adminTelefono?: string;
     adminCorreo: string;
     adminPassword: string;
+    adminPin?: string;
     vendedorNombre?: string;
     vendedorTelefono?: string;
     vendedorCorreo?: string;
     vendedorPassword?: string;
+    vendedorPin?: string;
     plan?: string;
     fechaFin?: string;
 }

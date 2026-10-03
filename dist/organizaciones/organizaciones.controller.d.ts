@@ -48,6 +48,7 @@ export declare class OrganizacionesController {
             fechaInicio: Date;
             fechaFin: Date;
         };
+        articulosPrecargadosCount: number;
     }>;
     findAll(): Promise<({
         suscripciones: {

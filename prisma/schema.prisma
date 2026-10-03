@@ -95,6 +95,7 @@ model Usuario {
   email          String       @unique
   telefono       String?
   password       String
+  pin            String?      // Código de acceso rápido (PIN de 4-6 dígitos)
   rol            RolUsuario   @default(VENDEDOR)
   activo         Boolean      @default(true)
   createdAt      DateTime     @default(now())

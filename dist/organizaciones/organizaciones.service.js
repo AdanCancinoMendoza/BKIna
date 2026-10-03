@@ -8,6 +8,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
     if (typeof Reflect === "object" && typeof Reflect.metadata === "function") return Reflect.metadata(k, v);
 };
 import { BadRequestException, ConflictException, Injectable, NotFoundException, } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { getCatalogoSemilla } from './data/catalogos-semilla.js';
@@ -36,13 +37,22 @@ let OrganizacionesService = class OrganizacionesService {
             }
         }
         const hashedAdminPassword = await bcrypt.hash(dto.adminPassword, 10);
+        const hashedAdminPin = dto.adminPin ? await bcrypt.hash(dto.adminPin.trim(), 10) : null;
         const hashedVendedorPassword = dto.vendedorPassword
             ? await bcrypt.hash(dto.vendedorPassword, 10)
+            : null;
+        const hashedVendedorPin = dto.vendedorPin
+            ? await bcrypt.hash(dto.vendedorPin.trim(), 10)
             : null;
         const fechaInicio = new Date();
         let fechaFin = dto.fechaFin ? new Date(dto.fechaFin) : null;
         if (!fechaFin || isNaN(fechaFin.getTime())) {
-            fechaFin = new Date(fechaInicio.getTime() + 30 * 24 * 60 * 60 * 1000);
+            if (dto.plan === 'GRATUITO') {
+                fechaFin = new Date(fechaInicio.getTime() + 36500 * 24 * 60 * 60 * 1000);
+            }
+            else {
+                fechaFin = new Date(fechaInicio.getTime() + 30 * 24 * 60 * 60 * 1000);
+            }
         }
         return this.prisma.$transaction(async (tx) => {
             const organizacion = await tx.organizacion.create({
@@ -81,6 +91,7 @@ let OrganizacionesService = class OrganizacionesService {
                     email: dto.adminCorreo.toLowerCase().trim(),
                     telefono: dto.adminTelefono ? dto.adminTelefono.trim() : null,
                     password: hashedAdminPassword,
+                    pin: hashedAdminPin,
                     rol: 'ADMIN',
                     activo: true,
                 },
@@ -97,6 +108,7 @@ let OrganizacionesService = class OrganizacionesService {
                         email: dto.vendedorCorreo.toLowerCase().trim(),
                         telefono: dto.vendedorTelefono ? dto.vendedorTelefono.trim() : null,
                         password: hashedVendedorPassword,
+                        pin: hashedVendedorPin,
                         rol: 'VENDEDOR',
                         activo: true,
                     },
@@ -114,6 +126,8 @@ let OrganizacionesService = class OrganizacionesService {
             let articulosPrecargadosCount = 0;
             if (dto.precargarArticulos) {
                 const catalogo = getCatalogoSemilla(dto.pais || organizacion.pais || 'México', dto.giroComercial);
+                const articulosParaCrear = [];
+                const inventariosParaCrear = [];
                 for (const fam of catalogo) {
                     const familiaCreada = await tx.familia.create({
                         data: {
@@ -139,31 +153,40 @@ let OrganizacionesService = class OrganizacionesService {
                             }
                             subfamiliaId = subfamiliasMap.get(subfamKey) || null;
                         }
-                        const articuloCreado = await tx.articulo.create({
-                            data: {
-                                organizacionId: organizacion.id,
-                                familiaId: familiaCreada.id,
-                                subfamiliaId: subfamiliaId,
-                                codigo: art.codigo,
-                                nombre: art.nombre,
-                                descripcion: art.descripcion || null,
-                                precioCompra: 0,
-                                precioVenta: 0,
-                                unidad: art.unidad || 'Pieza',
-                                activo: true,
-                            },
+                        const articuloId = randomUUID();
+                        articulosParaCrear.push({
+                            id: articuloId,
+                            organizacionId: organizacion.id,
+                            familiaId: familiaCreada.id,
+                            subfamiliaId: subfamiliaId,
+                            codigo: art.codigo,
+                            nombre: art.nombre,
+                            descripcion: art.descripcion || null,
+                            precioCompra: 0,
+                            precioVenta: 0,
+                            unidad: art.unidad || 'Pieza',
+                            activo: true,
                         });
-                        await tx.inventario.create({
-                            data: {
-                                sucursalId: sucursal.id,
-                                articuloId: articuloCreado.id,
-                                stockActual: 0,
-                                stockMinimo: 0,
-                                stockMaximo: 0,
-                            },
+                        inventariosParaCrear.push({
+                            id: randomUUID(),
+                            sucursalId: sucursal.id,
+                            articuloId: articuloId,
+                            stockActual: 0,
+                            stockMinimo: 0,
+                            stockMaximo: 0,
                         });
-                        articulosPrecargadosCount++;
                     }
+                }
+                if (articulosParaCrear.length > 0) {
+                    await tx.articulo.createMany({
+                        data: articulosParaCrear,
+                        skipDuplicates: true,
+                    });
+                    await tx.inventario.createMany({
+                        data: inventariosParaCrear,
+                        skipDuplicates: true,
+                    });
+                    articulosPrecargadosCount = articulosParaCrear.length;
                 }
             }
             return {
@@ -213,7 +236,11 @@ let OrganizacionesService = class OrganizacionesService {
                     fechaInicio: suscripcion.fechaInicio,
                     fechaFin: suscripcion.fechaFin,
                 },
+                articulosPrecargadosCount,
             };
+        }, {
+            maxWait: 30000,
+            timeout: 60000,
         });
     }
     async findAll() {

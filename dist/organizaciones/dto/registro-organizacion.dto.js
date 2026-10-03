@@ -26,10 +26,12 @@ export class RegistroOrganizacionDto {
     adminTelefono;
     adminCorreo;
     adminPassword;
+    adminPin;
     vendedorNombre;
     vendedorTelefono;
     vendedorCorreo;
     vendedorPassword;
+    vendedorPin;
     plan;
     fechaFin;
 }
@@ -122,6 +124,11 @@ __decorate([
     IsString(),
     IsOptional(),
     __metadata("design:type", String)
+], RegistroOrganizacionDto.prototype, "adminPin", void 0);
+__decorate([
+    IsString(),
+    IsOptional(),
+    __metadata("design:type", String)
 ], RegistroOrganizacionDto.prototype, "vendedorNombre", void 0);
 __decorate([
     IsString(),
@@ -138,6 +145,11 @@ __decorate([
     IsOptional(),
     __metadata("design:type", String)
 ], RegistroOrganizacionDto.prototype, "vendedorPassword", void 0);
+__decorate([
+    IsString(),
+    IsOptional(),
+    __metadata("design:type", String)
+], RegistroOrganizacionDto.prototype, "vendedorPin", void 0);
 __decorate([
     IsString(),
     IsOptional(),

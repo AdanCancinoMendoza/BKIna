@@ -4,6 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
 import bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { RegistroOrganizacionDto } from './dto/registro-organizacion.dto.js';
@@ -16,8 +17,8 @@ export class OrganizacionesService {
   /**
    * Registro integral de una Organización / Cuenta de Empresa:
    * 1. Valida unicidad de correos de usuarios.
-   * 2. Encripta contraseñas.
-   * 3. Crea Organización, Sucursal inicial, Administrador, Vendedor (opcional) y Suscripción en una transacción.
+   * 2. Encripta contraseñas y PINs de acceso rápido.
+   * 3. Crea Organización, Sucursal inicial, Administrador, Vendedor (opcional) y Suscripción en una transacción optimizada.
    */
   async registrarEmpresa(dto: RegistroOrganizacionDto) {
     // 1. Validar que el correo del admin no esté registrado
@@ -51,141 +52,159 @@ export class OrganizacionesService {
       }
     }
 
-    // 3. Hashear contraseñas
+    // 3. Hashear contraseñas y PINs de acceso rápido
     const hashedAdminPassword = await bcrypt.hash(dto.adminPassword, 10);
+    const hashedAdminPin = dto.adminPin ? await bcrypt.hash(dto.adminPin.trim(), 10) : null;
+
     const hashedVendedorPassword = dto.vendedorPassword
       ? await bcrypt.hash(dto.vendedorPassword, 10)
+      : null;
+    const hashedVendedorPin = dto.vendedorPin
+      ? await bcrypt.hash(dto.vendedorPin.trim(), 10)
       : null;
 
     // 4. Fechas de suscripción
     const fechaInicio = new Date();
     let fechaFin = dto.fechaFin ? new Date(dto.fechaFin) : null;
     if (!fechaFin || isNaN(fechaFin.getTime())) {
-      // 30 días de periodo por defecto
-      fechaFin = new Date(fechaInicio.getTime() + 30 * 24 * 60 * 60 * 1000);
+      if (dto.plan === 'GRATUITO') {
+        // Plan Gratuito: 100 años (permanente / sin caducidad)
+        fechaFin = new Date(fechaInicio.getTime() + 36500 * 24 * 60 * 60 * 1000);
+      } else {
+        // 30 días de periodo por defecto para planes estándar
+        fechaFin = new Date(fechaInicio.getTime() + 30 * 24 * 60 * 60 * 1000);
+      }
     }
 
-    // 5. Transacción Prisma para garantizar integridad atómica
-    return this.prisma.$transaction(async (tx) => {
-      // A) Crear la Organización
-      const organizacion = await tx.organizacion.create({
-        data: {
-          nombre: dto.nombre.trim(),
-          email: dto.correo ? dto.correo.toLowerCase().trim() : null,
-          telefono: dto.telefono ? dto.telefono.trim() : null,
-          pais: dto.pais ? dto.pais.trim() : 'México',
-          estado: dto.estado ? dto.estado.trim() : null,
-          municipio: dto.municipio ? dto.municipio.trim() : null,
-          codigoPostal: dto.codigoPostal ? dto.codigoPostal.trim() : null,
-          direccion: dto.direccion ? dto.direccion.trim() : null,
-        },
-      });
+    // 5. Transacción Prisma optimizada con timeout extendido y bulk insert
+    return this.prisma.$transaction(
+      async (tx) => {
+        // A) Crear la Organización (activa inmediatamente, sin requerir verificación de correo)
+        const organizacion = await tx.organizacion.create({
+          data: {
+            nombre: dto.nombre.trim(),
+            email: dto.correo ? dto.correo.toLowerCase().trim() : null,
+            telefono: dto.telefono ? dto.telefono.trim() : null,
+            pais: dto.pais ? dto.pais.trim() : 'México',
+            estado: dto.estado ? dto.estado.trim() : null,
+            municipio: dto.municipio ? dto.municipio.trim() : null,
+            codigoPostal: dto.codigoPostal ? dto.codigoPostal.trim() : null,
+            direccion: dto.direccion ? dto.direccion.trim() : null,
+          },
+        });
 
-      // B) Crear la Sucursal inicial
-      const sucursal = await tx.sucursal.create({
-        data: {
-          organizacionId: organizacion.id,
-          nombre: dto.sucursalNombre.trim(),
-          telefono: dto.sucursalTelefono ? dto.sucursalTelefono.trim() : null,
-          direccion: dto.sucursalDireccion ? dto.sucursalDireccion.trim() : null,
-          activo: true,
-        },
-      });
-
-      // C) Crear Terminal por defecto para la sucursal (ej. "Caja 01")
-      const terminal = await tx.terminal.create({
-        data: {
-          sucursalId: sucursal.id,
-          nombre: 'Caja 01',
-          estado: 'Cerrada',
-        },
-      });
-
-      // D) Crear Usuario Administrador
-      const admin = await tx.usuario.create({
-        data: {
-          organizacionId: organizacion.id,
-          sucursalId: sucursal.id,
-          nombre: dto.adminNombre.trim(),
-          email: dto.adminCorreo.toLowerCase().trim(),
-          telefono: dto.adminTelefono ? dto.adminTelefono.trim() : null,
-          password: hashedAdminPassword,
-          rol: 'ADMIN',
-          activo: true,
-        },
-      });
-
-      // E) Crear Usuario Vendedor (si se proporcionaron datos)
-      let vendedor: any = null;
-      if (
-        dto.vendedorNombre &&
-        dto.vendedorCorreo &&
-        hashedVendedorPassword
-      ) {
-        vendedor = await tx.usuario.create({
+        // B) Crear la Sucursal inicial
+        const sucursal = await tx.sucursal.create({
           data: {
             organizacionId: organizacion.id,
-            sucursalId: sucursal.id,
-            nombre: dto.vendedorNombre.trim(),
-            email: dto.vendedorCorreo.toLowerCase().trim(),
-            telefono: dto.vendedorTelefono ? dto.vendedorTelefono.trim() : null,
-            password: hashedVendedorPassword,
-            rol: 'VENDEDOR',
+            nombre: dto.sucursalNombre.trim(),
+            telefono: dto.sucursalTelefono ? dto.sucursalTelefono.trim() : null,
+            direccion: dto.sucursalDireccion ? dto.sucursalDireccion.trim() : null,
             activo: true,
           },
         });
-      }
 
-      // F) Crear Suscripción
-      const suscripcion = await tx.suscripcion.create({
-        data: {
-          organizacionId: organizacion.id,
-          plan: dto.plan ? dto.plan.trim() : 'BASICO',
-          estado: 'Activa',
-          fechaInicio,
-          fechaFin,
-        },
-      });
+        // C) Crear Terminal por defecto para la sucursal (ej. "Caja 01")
+        const terminal = await tx.terminal.create({
+          data: {
+            sucursalId: sucursal.id,
+            nombre: 'Caja 01',
+            estado: 'Cerrada',
+          },
+        });
 
-      // G) Precargar Catálogo Inicial de Artículos (si fue solicitado)
-      let articulosPrecargadosCount = 0;
-      if (dto.precargarArticulos) {
-        const catalogo = getCatalogoSemilla(
-          dto.pais || organizacion.pais || 'México',
-          dto.giroComercial,
-        );
+        // D) Crear Usuario Administrador (activo directamente)
+        const admin = await tx.usuario.create({
+          data: {
+            organizacionId: organizacion.id,
+            sucursalId: sucursal.id,
+            nombre: dto.adminNombre.trim(),
+            email: dto.adminCorreo.toLowerCase().trim(),
+            telefono: dto.adminTelefono ? dto.adminTelefono.trim() : null,
+            password: hashedAdminPassword,
+            pin: hashedAdminPin,
+            rol: 'ADMIN',
+            activo: true,
+          },
+        });
 
-        for (const fam of catalogo) {
-          const familiaCreada = await tx.familia.create({
+        // E) Crear Usuario Vendedor (si se proporcionaron datos)
+        let vendedor: any = null;
+        if (
+          dto.vendedorNombre &&
+          dto.vendedorCorreo &&
+          hashedVendedorPassword
+        ) {
+          vendedor = await tx.usuario.create({
             data: {
               organizacionId: organizacion.id,
-              nombre: fam.nombre,
-              descripcion: fam.descripcion,
+              sucursalId: sucursal.id,
+              nombre: dto.vendedorNombre.trim(),
+              email: dto.vendedorCorreo.toLowerCase().trim(),
+              telefono: dto.vendedorTelefono ? dto.vendedorTelefono.trim() : null,
+              password: hashedVendedorPassword,
+              pin: hashedVendedorPin,
+              rol: 'VENDEDOR',
+              activo: true,
             },
           });
+        }
 
-          // Mapa de subfamilias creadas para esta familia (nombre -> id)
-          const subfamiliasMap = new Map<string, string>();
+        // F) Crear Suscripción
+        const suscripcion = await tx.suscripcion.create({
+          data: {
+            organizacionId: organizacion.id,
+            plan: dto.plan ? dto.plan.trim() : 'BASICO',
+            estado: 'Activa',
+            fechaInicio,
+            fechaFin,
+          },
+        });
 
-          for (const art of fam.articulos) {
-            let subfamiliaId: string | null = null;
-            if (art.subfamilia) {
-              const subfamKey = art.subfamilia.trim();
-              if (!subfamiliasMap.has(subfamKey)) {
-                const subfamCreada = await tx.subfamilia.create({
-                  data: {
-                    familiaId: familiaCreada.id,
-                    nombre: subfamKey,
-                    descripcion: `Subcategoría de ${fam.nombre}`,
-                  },
-                });
-                subfamiliasMap.set(subfamKey, subfamCreada.id);
-              }
-              subfamiliaId = subfamiliasMap.get(subfamKey) || null;
-            }
+        // G) Precargar Catálogo Inicial de Artículos (Bulk Insert optimizado)
+        let articulosPrecargadosCount = 0;
+        if (dto.precargarArticulos) {
+          const catalogo = getCatalogoSemilla(
+            dto.pais || organizacion.pais || 'México',
+            dto.giroComercial,
+          );
 
-            const articuloCreado = await tx.articulo.create({
+          const articulosParaCrear: any[] = [];
+          const inventariosParaCrear: any[] = [];
+
+          for (const fam of catalogo) {
+            const familiaCreada = await tx.familia.create({
               data: {
+                organizacionId: organizacion.id,
+                nombre: fam.nombre,
+                descripcion: fam.descripcion,
+              },
+            });
+
+            // Mapa de subfamilias creadas para esta familia (nombre -> id)
+            const subfamiliasMap = new Map<string, string>();
+
+            for (const art of fam.articulos) {
+              let subfamiliaId: string | null = null;
+              if (art.subfamilia) {
+                const subfamKey = art.subfamilia.trim();
+                if (!subfamiliasMap.has(subfamKey)) {
+                  const subfamCreada = await tx.subfamilia.create({
+                    data: {
+                      familiaId: familiaCreada.id,
+                      nombre: subfamKey,
+                      descripcion: `Subcategoría de ${fam.nombre}`,
+                    },
+                  });
+                  subfamiliasMap.set(subfamKey, subfamCreada.id);
+                }
+                subfamiliaId = subfamiliasMap.get(subfamKey) || null;
+              }
+
+              const articuloId = randomUUID();
+
+              articulosParaCrear.push({
+                id: articuloId,
                 organizacionId: organizacion.id,
                 familiaId: familiaCreada.id,
                 subfamiliaId: subfamiliaId,
@@ -196,73 +215,89 @@ export class OrganizacionesService {
                 precioVenta: 0,
                 unidad: art.unidad || 'Pieza',
                 activo: true,
-              },
-            });
+              });
 
-            await tx.inventario.create({
-              data: {
+              inventariosParaCrear.push({
+                id: randomUUID(),
                 sucursalId: sucursal.id,
-                articuloId: articuloCreado.id,
+                articuloId: articuloId,
                 stockActual: 0,
                 stockMinimo: 0,
                 stockMaximo: 0,
-              },
+              });
+            }
+          }
+
+          if (articulosParaCrear.length > 0) {
+            await tx.articulo.createMany({
+              data: articulosParaCrear,
+              skipDuplicates: true,
             });
 
-            articulosPrecargadosCount++;
+            await tx.inventario.createMany({
+              data: inventariosParaCrear,
+              skipDuplicates: true,
+            });
+
+            articulosPrecargadosCount = articulosParaCrear.length;
           }
         }
-      }
 
-      return {
-        mensaje: 'Organización registrada exitosamente',
-        organizacion: {
-          id: organizacion.id,
-          nombre: organizacion.nombre,
-          email: organizacion.email,
-          telefono: organizacion.telefono,
-          direccion: organizacion.direccion,
-          pais: organizacion.pais,
-          estado: organizacion.estado,
-          municipio: organizacion.municipio,
-          codigoPostal: organizacion.codigoPostal,
-          createdAt: organizacion.createdAt,
-        },
-        sucursal: {
-          id: sucursal.id,
-          nombre: sucursal.nombre,
-          direccion: sucursal.direccion,
-          telefono: sucursal.telefono,
-          terminalInicial: {
-            id: terminal.id,
-            nombre: terminal.nombre,
+        return {
+          mensaje: 'Organización registrada exitosamente',
+          organizacion: {
+            id: organizacion.id,
+            nombre: organizacion.nombre,
+            email: organizacion.email,
+            telefono: organizacion.telefono,
+            direccion: organizacion.direccion,
+            pais: organizacion.pais,
+            estado: organizacion.estado,
+            municipio: organizacion.municipio,
+            codigoPostal: organizacion.codigoPostal,
+            createdAt: organizacion.createdAt,
           },
-        },
-        admin: {
-          id: admin.id,
-          nombre: admin.nombre,
-          email: admin.email,
-          telefono: admin.telefono,
-          rol: admin.rol,
-        },
-        vendedor: vendedor
-          ? {
-              id: vendedor.id,
-              nombre: vendedor.nombre,
-              email: vendedor.email,
-              telefono: vendedor.telefono,
-              rol: vendedor.rol,
-            }
-          : null,
-        suscripcion: {
-          id: suscripcion.id,
-          plan: suscripcion.plan,
-          estado: suscripcion.estado,
-          fechaInicio: suscripcion.fechaInicio,
-          fechaFin: suscripcion.fechaFin,
-        },
-      };
-    });
+          sucursal: {
+            id: sucursal.id,
+            nombre: sucursal.nombre,
+            direccion: sucursal.direccion,
+            telefono: sucursal.telefono,
+            terminalInicial: {
+              id: terminal.id,
+              nombre: terminal.nombre,
+            },
+          },
+          admin: {
+            id: admin.id,
+            nombre: admin.nombre,
+            email: admin.email,
+            telefono: admin.telefono,
+            rol: admin.rol,
+          },
+          vendedor: vendedor
+            ? {
+                id: vendedor.id,
+                nombre: vendedor.nombre,
+                email: vendedor.email,
+                telefono: vendedor.telefono,
+                rol: vendedor.rol,
+              }
+            : null,
+          suscripcion: {
+            id: suscripcion.id,
+            plan: suscripcion.plan,
+            estado: suscripcion.estado,
+            fechaInicio: suscripcion.fechaInicio,
+            fechaFin: suscripcion.fechaFin,
+          },
+          articulosPrecargadosCount,
+        };
+      },
+      {
+        maxWait: 30000, // Tiempo máximo de espera para conexión
+        timeout: 60000, // Timeout extendido de 60 segundos
+      },
+    );
   }
 
   async findAll() {

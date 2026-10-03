@@ -54,19 +54,19 @@ export declare class VentasService {
                 updatedAt: Date;
                 descripcion: string | null;
                 familiaId: string | null;
+                subfamiliaId: string | null;
                 codigo: string;
                 precioCompra: import("@prisma/client/runtime/library").Decimal;
                 precioVenta: import("@prisma/client/runtime/library").Decimal;
                 unidad: string;
                 imagen: string | null;
-                subfamiliaId: string | null;
             };
         } & {
             id: string;
-            articuloId: string;
             subtotal: import("@prisma/client/runtime/library").Decimal;
             cantidad: number;
             precioUnitario: import("@prisma/client/runtime/library").Decimal;
+            articuloId: string;
             ventaId: string;
         })[];
     } & {
@@ -93,6 +93,7 @@ export declare class VentasService {
             organizacionId: string;
             sucursalId: string | null;
             password: string;
+            pin: string | null;
             rol: import("@prisma/client").$Enums.RolUsuario;
             activo: boolean;
             createdAt: Date;
@@ -121,19 +122,19 @@ export declare class VentasService {
                 updatedAt: Date;
                 descripcion: string | null;
                 familiaId: string | null;
+                subfamiliaId: string | null;
                 codigo: string;
                 precioCompra: import("@prisma/client/runtime/library").Decimal;
                 precioVenta: import("@prisma/client/runtime/library").Decimal;
                 unidad: string;
                 imagen: string | null;
-                subfamiliaId: string | null;
             };
         } & {
             id: string;
-            articuloId: string;
             subtotal: import("@prisma/client/runtime/library").Decimal;
             cantidad: number;
             precioUnitario: import("@prisma/client/runtime/library").Decimal;
+            articuloId: string;
             ventaId: string;
         })[];
     } & {

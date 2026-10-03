@@ -48,6 +48,7 @@ export declare class OrganizacionesService {
             fechaInicio: Date;
             fechaFin: Date;
         };
+        articulosPrecargadosCount: number;
     }>;
     findAll(): Promise<({
         suscripciones: {

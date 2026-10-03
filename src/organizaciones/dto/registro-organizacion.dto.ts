@@ -72,6 +72,10 @@ export class RegistroOrganizacionDto {
   @IsNotEmpty({ message: 'La contraseña del administrador es obligatoria' })
   adminPassword: string;
 
+  @IsString()
+  @IsOptional()
+  adminPin?: string;
+
   // Vendedor (opcional)
   @IsString()
   @IsOptional()
@@ -88,6 +92,10 @@ export class RegistroOrganizacionDto {
   @IsString()
   @IsOptional()
   vendedorPassword?: string;
+
+  @IsString()
+  @IsOptional()
+  vendedorPin?: string;
 
   // Plan / Membresía
   @IsString()
