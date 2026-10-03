@@ -6,20 +6,25 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 model Organizacion {
-  id        String   @id @default(uuid())
-  nombre    String
-  rfc       String?
-  direccion String?
-  telefono  String?
-  email     String?
-  logo      String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           String   @id @default(uuid())
+  nombre       String
+  rfc          String?
+  direccion    String?
+  pais         String?
+  estado       String?
+  municipio    String?
+  codigoPostal String?
+  telefono     String?
+  email        String?
+  logo         String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   sucursales    Sucursal[]
   usuarios      Usuario[]
@@ -88,6 +93,7 @@ model Usuario {
   sucursal       Sucursal?    @relation(fields: [sucursalId], references: [id], onDelete: SetNull)
   nombre         String
   email          String       @unique
+  telefono       String?
   password       String
   rol            RolUsuario   @default(VENDEDOR)
   activo         Boolean      @default(true)
