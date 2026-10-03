@@ -1,0 +1,267 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Organizacion {
+  id        String   @id @default(uuid())
+  nombre    String
+  rfc       String?
+  direccion String?
+  telefono  String?
+  email     String?
+  logo      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sucursales    Sucursal[]
+  usuarios      Usuario[]
+  familias      Familia[]
+  articulos     Articulo[]
+  clientes      Cliente[]
+  ventas        Venta[]
+  promociones   Promocion[]
+  campanas      Campana[]
+  suscripciones Suscripcion[]
+}
+
+model Suscripcion {
+  id             String       @id @default(uuid())
+  organizacionId String
+  organizacion   Organizacion @relation(fields: [organizacionId], references: [id], onDelete: Cascade)
+  plan           String       // "Básico", "Pro", "Enterprise"
+  estado         String       // "Activa", "Cancelada", "Pendiente"
+  fechaInicio    DateTime
+  fechaFin       DateTime
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+}
+
+model Sucursal {
+  id             String       @id @default(uuid())
+  organizacionId String
+  organizacion   Organizacion @relation(fields: [organizacionId], references: [id], onDelete: Cascade)
+  nombre         String
+  direccion      String?
+  telefono       String?
+  activo         Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  terminales       Terminal[]
+  usuarios         Usuario[]
+  inventarios      Inventario[]
+  movimientosStock MovimientoStock[]
+  ventas           Venta[]
+}
+
+model Terminal {
+  id         String   @id @default(uuid())
+  sucursalId String
+  sucursal   Sucursal @relation(fields: [sucursalId], references: [id], onDelete: Cascade)
+  nombre     String   // Ej. "Caja 01", "Caja 02"
+  estado     String   @default("Cerrada") // "Abierta", "Cerrada"
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  ventas Venta[]
+}
+
+enum RolUsuario {
+  ADMIN
+  GERENTE
+  VENDEDOR
+}
+
+model Usuario {
+  id             String       @id @default(uuid())
+  organizacionId String
+  organizacion   Organizacion @relation(fields: [organizacionId], references: [id], onDelete: Cascade)
+  sucursalId     String?
+  sucursal       Sucursal?    @relation(fields: [sucursalId], references: [id], onDelete: SetNull)
+  nombre         String
+  email          String       @unique
+  password       String
+  rol            RolUsuario   @default(VENDEDOR)
+  activo         Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  ventas           Venta[]
+  movimientosStock MovimientoStock[]
+}
+
+model Familia {
+  id             String       @id @default(uuid())
+  organizacionId String
+  organizacion   Organizacion @relation(fields: [organizacionId], references: [id], onDelete: Cascade)
+  nombre         String
+  descripcion    String?
+  createdAt      DateTime     @default(now())
+
+  subfamilias Subfamilia[]
+  articulos   Articulo[]
+}
+
+model Subfamilia {
+  id          String   @id @default(uuid())
+  familiaId   String
+  familia     Familia  @relation(fields: [familiaId], references: [id], onDelete: Cascade)
+  nombre      String
+  descripcion String?
+  createdAt   DateTime @default(now())
+
+  articulos Articulo[]
+}
+
+model Articulo {
+  id             String       @id @default(uuid())
+  organizacionId String
+  organizacion   Organizacion @relation(fields: [organizacionId], references: [id], onDelete: Cascade)
+  familiaId      String?
+  familia        Familia?     @relation(fields: [familiaId], references: [id], onDelete: SetNull)
+  subfamiliaId   String?
+  subfamilia     Subfamilia?  @relation(fields: [subfamiliaId], references: [id], onDelete: SetNull)
+  codigo         String       // SKU / Código de barras
+  nombre         String
+  descripcion    String?
+  precioCompra   Decimal      @db.Decimal(10, 2)
+  precioVenta    Decimal      @db.Decimal(10, 2)
+  unidad         String       @default("Pieza") // "Pieza", "Kg", "Ltr", etc.
+  imagen         String?
+  activo         Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  inventarios      Inventario[]
+  detallesVenta    DetalleVenta[]
+  movimientosStock MovimientoStock[]
+
+  @@unique([organizacionId, codigo])
+}
+
+model Inventario {
+  id          String   @id @default(uuid())
+  sucursalId  String
+  sucursal    Sucursal @relation(fields: [sucursalId], references: [id], onDelete: Cascade)
+  articuloId  String
+  articulo    Articulo @relation(fields: [articuloId], references: [id], onDelete: Cascade)
+  stockActual Int      @default(0)
+  stockMinimo Int      @default(5)
+  stockMaximo Int      @default(100)
+  updatedAt   DateTime @updatedAt
+
+  @@unique([sucursalId, articuloId])
+}
+
+enum TipoMovimiento {
+  ENTRADA
+  SALIDA
+  AJUSTE
+  VENTA
+}
+
+model MovimientoStock {
+  id         String         @id @default(uuid())
+  articuloId String
+  articulo   Articulo       @relation(fields: [articuloId], references: [id], onDelete: Cascade)
+  sucursalId String
+  sucursal   Sucursal       @relation(fields: [sucursalId], references: [id], onDelete: Cascade)
+  usuarioId  String?
+  usuario    Usuario?       @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
+  tipo       TipoMovimiento
+  cantidad   Int
+  motivo     String?
+  createdAt  DateTime       @default(now())
+}
+
+model Cliente {
+  id             String       @id @default(uuid())
+  organizacionId String
+  organizacion   Organizacion @relation(fields: [organizacionId], references: [id], onDelete: Cascade)
+  nombre         String
+  telefono       String?
+  email          String?
+  rfc            String?
+  localidad      String?
+  puntos         Int          @default(0)
+  saldo          Decimal      @default(0.00) @db.Decimal(10, 2)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  ventas Venta[]
+}
+
+enum EstadoVenta {
+  PAGADO
+  DEVUELTO
+  CANCELADO
+}
+
+model Venta {
+  id             String       @id @default(uuid())
+  folio          String       // ej. "T-000128"
+  organizacionId String
+  organizacion   Organizacion @relation(fields: [organizacionId], references: [id], onDelete: Cascade)
+  sucursalId     String
+  sucursal       Sucursal     @relation(fields: [sucursalId], references: [id], onDelete: Cascade)
+  terminalId     String?
+  terminal       Terminal?    @relation(fields: [terminalId], references: [id], onDelete: SetNull)
+  clienteId      String?
+  cliente        Cliente?     @relation(fields: [clienteId], references: [id], onDelete: SetNull)
+  usuarioId      String?      // Vendedor
+  usuario        Usuario?     @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
+
+  subtotal   Decimal     @db.Decimal(10, 2)
+  impuesto   Decimal     @db.Decimal(10, 2)
+  total      Decimal     @db.Decimal(10, 2)
+  metodoPago String      // "Efectivo", "Tarjeta", "Transferencia"
+  estado     EstadoVenta @default(PAGADO)
+  createdAt  DateTime    @default(now())
+
+  detalles DetalleVenta[]
+}
+
+model DetalleVenta {
+  id             String   @id @default(uuid())
+  ventaId        String
+  venta          Venta    @relation(fields: [ventaId], references: [id], onDelete: Cascade)
+  articuloId     String
+  articulo       Articulo @relation(fields: [articuloId], references: [id], onDelete: Cascade)
+  cantidad       Int
+  precioUnitario Decimal  @db.Decimal(10, 2)
+  subtotal       Decimal  @db.Decimal(10, 2)
+}
+
+model Promocion {
+  id             String       @id @default(uuid())
+  organizacionId String
+  organizacion   Organizacion @relation(fields: [organizacionId], references: [id], onDelete: Cascade)
+  nombre         String
+  descripcion    String?
+  tipo           String       // "PORCENTAJE", "MONTO_FIJO", "2X1"
+  descuento      Decimal      @db.Decimal(10, 2)
+  fechaInicio    DateTime
+  fechaFin       DateTime
+  activo         Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+}
+
+model Campana {
+  id             String       @id @default(uuid())
+  organizacionId String
+  organizacion   Organizacion @relation(fields: [organizacionId], references: [id], onDelete: Cascade)
+  nombre         String
+  canal          String       // "SMS", "WHATSAPP", "EMAIL"
+  mensaje        String
+  estado         String       @default("BORRADOR") // "BORRADOR", "ENVIADA", "PROGRAMADA"
+  fechaEnvio     DateTime?
+  createdAt      DateTime     @default(now())
+}
