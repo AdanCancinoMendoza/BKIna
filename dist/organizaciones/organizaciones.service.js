@@ -10,6 +10,7 @@ var __metadata = (this && this.__metadata) || function (k, v) {
 import { BadRequestException, ConflictException, Injectable, NotFoundException, } from '@nestjs/common';
 import bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { getCatalogoSemilla } from './data/catalogos-semilla.js';
 let OrganizacionesService = class OrganizacionesService {
     prisma;
     constructor(prisma) {
@@ -110,6 +111,44 @@ let OrganizacionesService = class OrganizacionesService {
                     fechaFin,
                 },
             });
+            let articulosPrecargadosCount = 0;
+            if (dto.precargarArticulos) {
+                const catalogo = getCatalogoSemilla(dto.pais || organizacion.pais || 'México', dto.giroComercial);
+                for (const fam of catalogo) {
+                    const familiaCreada = await tx.familia.create({
+                        data: {
+                            organizacionId: organizacion.id,
+                            nombre: fam.nombre,
+                            descripcion: fam.descripcion,
+                        },
+                    });
+                    for (const art of fam.articulos) {
+                        const articuloCreado = await tx.articulo.create({
+                            data: {
+                                organizacionId: organizacion.id,
+                                familiaId: familiaCreada.id,
+                                codigo: art.codigo,
+                                nombre: art.nombre,
+                                descripcion: art.descripcion || null,
+                                precioCompra: art.precioCompra,
+                                precioVenta: art.precioVenta,
+                                unidad: art.unidad || 'Pieza',
+                                activo: true,
+                            },
+                        });
+                        await tx.inventario.create({
+                            data: {
+                                sucursalId: sucursal.id,
+                                articuloId: articuloCreado.id,
+                                stockActual: art.stockInicial || 20,
+                                stockMinimo: 5,
+                                stockMaximo: 100,
+                            },
+                        });
+                        articulosPrecargadosCount++;
+                    }
+                }
+            }
             return {
                 mensaje: 'Organización registrada exitosamente',
                 organizacion: {

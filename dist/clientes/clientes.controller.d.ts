@@ -29,21 +29,21 @@ export declare class ClientesController {
                     activo: boolean;
                     createdAt: Date;
                     updatedAt: Date;
-                    familiaId: string | null;
-                    subfamiliaId: string | null;
-                    codigo: string;
                     descripcion: string | null;
+                    codigo: string;
                     precioCompra: import("@prisma/client/runtime/library").Decimal;
                     precioVenta: import("@prisma/client/runtime/library").Decimal;
                     unidad: string;
                     imagen: string | null;
+                    familiaId: string | null;
+                    subfamiliaId: string | null;
                 };
             } & {
                 id: string;
+                articuloId: string;
                 subtotal: import("@prisma/client/runtime/library").Decimal;
                 cantidad: number;
                 precioUnitario: import("@prisma/client/runtime/library").Decimal;
-                articuloId: string;
                 ventaId: string;
             })[];
         } & {

@@ -7,6 +7,8 @@ export declare class RegistroOrganizacionDto {
     municipio?: string;
     codigoPostal?: string;
     direccion?: string;
+    giroComercial?: string;
+    precargarArticulos?: boolean;
     sucursalNombre: string;
     sucursalTelefono?: string;
     sucursalDireccion?: string;

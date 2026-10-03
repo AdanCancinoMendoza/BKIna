@@ -17,6 +17,8 @@ export class RegistroOrganizacionDto {
     municipio;
     codigoPostal;
     direccion;
+    giroComercial;
+    precargarArticulos;
     sucursalNombre;
     sucursalTelefono;
     sucursalDireccion;
@@ -71,6 +73,15 @@ __decorate([
     IsOptional(),
     __metadata("design:type", String)
 ], RegistroOrganizacionDto.prototype, "direccion", void 0);
+__decorate([
+    IsString(),
+    IsOptional(),
+    __metadata("design:type", String)
+], RegistroOrganizacionDto.prototype, "giroComercial", void 0);
+__decorate([
+    IsOptional(),
+    __metadata("design:type", Boolean)
+], RegistroOrganizacionDto.prototype, "precargarArticulos", void 0);
 __decorate([
     IsString(),
     IsNotEmpty({ message: 'El nombre de la sucursal es obligatorio' }),

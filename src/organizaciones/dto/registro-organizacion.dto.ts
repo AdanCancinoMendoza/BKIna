@@ -34,6 +34,13 @@ export class RegistroOrganizacionDto {
   @IsOptional()
   direccion?: string;
 
+  @IsString()
+  @IsOptional()
+  giroComercial?: string;
+
+  @IsOptional()
+  precargarArticulos?: boolean;
+
   // Sucursal inicial
   @IsString()
   @IsNotEmpty({ message: 'El nombre de la sucursal es obligatorio' })
