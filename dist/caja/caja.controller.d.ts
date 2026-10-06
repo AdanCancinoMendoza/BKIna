@@ -3,36 +3,22 @@ export declare class CajaController {
     private readonly cajaService;
     constructor(cajaService: CajaService);
     obtenerEstadoCaja(terminalId: string): Promise<{
-        terminalId: string;
-        nombreTerminal: string;
-        estado: string;
-        sucursal: string;
+        terminalId: any;
+        nombreTerminal: any;
+        estado: any;
+        sucursal: any;
         ventasEfectivo: number;
         ventasTarjeta: number;
         totalVentas: number;
     }>;
     abrirCaja(terminalId: string, fondoInicial: number): Promise<{
         mensaje: string;
-        terminal: {
-            nombre: string;
-            estado: string;
-            id: string;
-            sucursalId: string;
-            createdAt: Date;
-            updatedAt: Date;
-        };
+        terminal: any;
         fondoInicial: number;
     }>;
     cerrarCaja(terminalId: string, efectivoMano: number, notas?: string): Promise<{
         mensaje: string;
-        terminal: {
-            nombre: string;
-            estado: string;
-            id: string;
-            sucursalId: string;
-            createdAt: Date;
-            updatedAt: Date;
-        };
+        terminal: any;
         efectivoEsperado: number;
         efectivoContado: number;
         diferencia: number;

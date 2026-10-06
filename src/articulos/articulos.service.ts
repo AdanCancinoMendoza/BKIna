@@ -17,6 +17,42 @@ export class ArticulosService {
     private readonly eventsGateway: EventsGateway,
   ) {}
 
+  async findAll(
+    organizacionId?: string,
+    search?: string,
+    familiaId?: string,
+    sucursalId?: string,
+  ) {
+    if (organizacionId) {
+      return this.findByOrganizacion(organizacionId, {
+        search,
+        familiaId,
+        sucursalId,
+      });
+    }
+
+    const where: any = {};
+    if (familiaId) where.familiaId = familiaId;
+    if (search) {
+      const q = search.trim();
+      where.OR = [
+        { nombre: { contains: q, mode: 'insensitive' } },
+        { codigo: { contains: q, mode: 'insensitive' } },
+        { descripcion: { contains: q, mode: 'insensitive' } },
+      ];
+    }
+
+    return this.prisma.articulo.findMany({
+      where,
+      include: {
+        familia: true,
+        subfamilia: true,
+        inventarios: true,
+      },
+      orderBy: { nombre: 'asc' },
+    });
+  }
+
   async findByOrganizacion(
     organizacionId: string,
     params?: {
@@ -119,7 +155,13 @@ export class ArticulosService {
       include: {
         familia: true,
         subfamilia: true,
-        inventarios: true,
+        inventarios: {
+          include: {
+            sucursal: {
+              select: { id: true, nombre: true },
+            },
+          },
+        },
       },
     });
 
@@ -311,6 +353,10 @@ export class ArticulosService {
     return { mensaje: 'Artículo eliminado correctamente', id };
   }
 
+  async remove(id: string) {
+    return this.delete(id);
+  }
+
   async precargarCatalogo(dto: {
     organizacionId: string;
     pais?: string;
@@ -330,7 +376,7 @@ export class ArticulosService {
       dto.giroComercial,
     );
 
-    const sucursalPrincipalId = org.sucursales[0]?.id;
+    const sucursalPrincipalId = org.sucursales?.[0]?.id;
     const articulosParaCrear: any[] = [];
     const inventariosParaCrear: any[] = [];
 
@@ -449,7 +495,6 @@ export class ArticulosService {
     const resultados: Array<{ title: string; url: string; thumb: string; source: string }> = [];
 
     try {
-      // 1. Open Food Facts (Ideal para productos de abarrotes, refrescos, botanas, lácteos, etc.)
       const offUrl = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(
         q,
       )}&search_simple=1&action=process&json=1&page_size=8`;
@@ -476,11 +521,10 @@ export class ArticulosService {
         }
       }
     } catch {
-      // Silently continue to fallback
+      // Silently continue
     }
 
     try {
-      // 2. Wikimedia Commons API
       const wikiUrl = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch=${encodeURIComponent(
         q,
       )}&gsrlimit=10&prop=imageinfo&iiprop=url&iiurlwidth=400&format=json&origin=*`;
@@ -507,7 +551,6 @@ export class ArticulosService {
       // Continue
     }
 
-    // Filtrar duplicados por URL
     const unique = new Map<string, { title: string; url: string; thumb: string; source: string }>();
     for (const item of resultados) {
       if (!unique.has(item.url)) {

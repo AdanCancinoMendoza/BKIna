@@ -41,7 +41,7 @@ export class ArticulosController {
     }
 
     if (!organizacionId) {
-      return [];
+      return this.articulosService.findAll(organizacionId, search, familiaId, sucursalId);
     }
 
     return this.articulosService.findByOrganizacion(organizacionId, {
@@ -89,6 +89,14 @@ export class ArticulosController {
     return this.articulosService.getStats(organizacionId);
   }
 
+  @Get('barcode/:codigo')
+  async findByBarcode(
+    @Param('codigo') codigo: string,
+    @Query('organizacionId') organizacionId: string,
+  ) {
+    return this.articulosService.findByCodigo(organizacionId, codigo);
+  }
+
   @Get('codigo/:organizacionId/:codigo')
   async findByCodigo(
     @Param('organizacionId') organizacionId: string,
@@ -104,14 +112,14 @@ export class ArticulosController {
 
   @Post()
   async create(
-    @Body() dto: CreateArticuloDto,
+    @Body() dto: any,
     @Query('organizacionId') organizacionId?: string,
   ) {
-    return this.articulosService.create(dto, organizacionId);
+    return this.articulosService.create(dto, organizacionId || dto.organizacionId);
   }
 
   @Put(':id')
-  async update(@Param('id') id: string, @Body() dto: UpdateArticuloDto) {
+  async update(@Param('id') id: string, @Body() dto: any) {
     return this.articulosService.update(id, dto);
   }
 

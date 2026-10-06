@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
   createClient,
@@ -7,7 +7,8 @@ import {
 
 @Injectable()
 export class SupabaseService {
-  private readonly client: SupabaseClient;
+  private readonly client: SupabaseClient | null = null;
+  private readonly logger = new Logger(SupabaseService.name);
 
   constructor(
     private readonly configService: ConfigService,
@@ -16,14 +17,15 @@ export class SupabaseService {
       this.configService.get<string>('SUPABASE_URL');
 
     const serviceRoleKey =
-      this.configService.get<string>(
-        'SUPABASE_SERVICE_ROLE_KEY',
-      );
+      this.configService.get<string>('SUPABASE_SERVICE_ROLE_KEY') ||
+      this.configService.get<string>('SUPABASE_KEY') ||
+      this.configService.get<string>('SUPABASE_ANON_KEY');
 
     if (!url || !serviceRoleKey) {
-      throw new Error(
-        'Faltan variables de configuración de Supabase',
+      this.logger.warn(
+        'Faltan variables de configuración de Supabase (SUPABASE_URL o credenciales). Cliente de Supabase no inicializado.',
       );
+      return;
     }
 
     this.client = createClient(
@@ -39,6 +41,11 @@ export class SupabaseService {
   }
 
   getClient(): SupabaseClient {
+    if (!this.client) {
+      throw new Error(
+        'El cliente de Supabase no está configurado. Verifique las variables de entorno.',
+      );
+    }
     return this.client;
   }
 }

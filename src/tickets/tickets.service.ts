@@ -69,7 +69,7 @@ export class TicketsService {
 
     if (!venta) throw new NotFoundException('Ticket no encontrado');
 
-    const ventaActualizada = await this.prisma.$transaction(async (tx) => {
+    const ventaActualizada = await this.prisma.$transaction(async (tx: any) => {
       // 1. Cambiar estado del ticket
       const v = await tx.venta.update({
         where: { id },

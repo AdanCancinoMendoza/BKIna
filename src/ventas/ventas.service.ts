@@ -21,7 +21,7 @@ export class VentasService {
     metodoPago: string;
     detalles: Array<{ articuloId: string; cantidad: number; precioUnitario: number; subtotal: number }>;
   }) {
-    const nuevaVenta = await this.prisma.$transaction(async (tx) => {
+    const nuevaVenta = await this.prisma.$transaction(async (tx: any) => {
       const count = await tx.venta.count({ where: { organizacionId: data.organizacionId } });
       const folio = `T-${(count + 1).toString().padStart(6, '0')}`;
 

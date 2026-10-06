@@ -93,9 +93,6 @@ let UsuariosService = class UsuariosService {
         if (!credencialValida && usuario.pin) {
             credencialValida = (await bcrypt.compare(dto.password, usuario.pin)) || dto.password === usuario.pin;
         }
-        if (!credencialValida && (dto.password === '1234' || dto.password === '0000')) {
-            credencialValida = true;
-        }
         if (!credencialValida) {
             throw new UnauthorizedException('Contraseña o PIN incorrecto');
         }
