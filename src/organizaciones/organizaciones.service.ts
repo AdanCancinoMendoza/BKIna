@@ -78,7 +78,7 @@ export class OrganizacionesService {
 
     // 5. Transacción Prisma optimizada con timeout extendido y bulk insert
     return this.prisma.$transaction(
-      async (tx) => {
+      async (tx: any) => {
         // A) Crear la Organización (activa inmediatamente, sin requerir verificación de correo)
         const organizacion = await tx.organizacion.create({
           data: {
