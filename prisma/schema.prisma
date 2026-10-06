@@ -26,6 +26,7 @@ model Organizacion {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
+  perfiles      Perfil[]
   sucursales    Sucursal[]
   usuarios      Usuario[]
   familias      Familia[]
@@ -79,10 +80,21 @@ model Terminal {
   ventas Venta[]
 }
 
-enum RolUsuario {
-  ADMIN
-  GERENTE
-  VENDEDOR
+model Perfil {
+  id             String       @id @default(uuid())
+  organizacionId String
+  organizacion   Organizacion @relation(fields: [organizacionId], references: [id], onDelete: Cascade)
+  nombre         String       // Ej. "Administrador", "Cajero", "Supervisor", "Vendedor"
+  descripcion    String?
+  esAdmin        Boolean      @default(false)
+  activo         Boolean      @default(true)
+  permisos       Json         // Configuración de módulos y permisos del Punto de Venta (POS)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  usuarios       Usuario[]
+
+  @@unique([organizacionId, nombre])
 }
 
 model Usuario {
@@ -91,12 +103,13 @@ model Usuario {
   organizacion   Organizacion @relation(fields: [organizacionId], references: [id], onDelete: Cascade)
   sucursalId     String?
   sucursal       Sucursal?    @relation(fields: [sucursalId], references: [id], onDelete: SetNull)
+  perfilId       String?
+  perfil         Perfil?      @relation(fields: [perfilId], references: [id], onDelete: SetNull)
   nombre         String
   email          String       @unique
   telefono       String?
   password       String
   pin            String?      // Código de acceso rápido (PIN de 4-6 dígitos)
-  rol            RolUsuario   @default(VENDEDOR)
   activo         Boolean      @default(true)
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt

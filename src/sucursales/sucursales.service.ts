@@ -35,7 +35,12 @@ export class SucursalesService {
             id: true,
             nombre: true,
             email: true,
-            rol: true,
+            perfil: {
+              select: {
+                id: true,
+                nombre: true,
+              },
+            },
             activo: true,
           },
         },

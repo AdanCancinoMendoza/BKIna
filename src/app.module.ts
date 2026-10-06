@@ -14,6 +14,7 @@ import { ClientesModule } from './clientes/clientes.module.js';
 import { TicketsModule } from './tickets/tickets.module.js';
 import { CajaModule } from './caja/caja.module.js';
 import { ArticulosModule } from './articulos/articulos.module.js';
+import { PerfilesModule } from './perfiles/perfiles.module.js';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { ArticulosModule } from './articulos/articulos.module.js';
     OrganizacionesModule,
     SucursalesModule,
     TerminalesModule,
+    PerfilesModule,
     UsuariosModule,
     SuscripcionesModule,
     VentasModule,

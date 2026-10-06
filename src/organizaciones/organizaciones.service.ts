@@ -113,22 +113,91 @@ export class OrganizacionesService {
           },
         });
 
-        // D) Crear Usuario Administrador (activo directamente)
+        // D) Crear Perfiles por defecto para la Organización
+        const perfilAdmin = await tx.perfil.create({
+          data: {
+            organizacionId: organizacion.id,
+            nombre: 'Administrador',
+            descripcion: 'Control total de módulos y administración del sistema y POS.',
+            esAdmin: true,
+            activo: true,
+            permisos: {
+              modulos: {
+                inicio: { ver: true },
+                clientes: { ver: true, crear: true, editar: true, eliminar: true },
+                articulos: { ver: true, crear: true, editar: true, eliminar: true },
+                stock: { ver: true, crear: true, editar: true, eliminar: true },
+                promociones: { ver: true, crear: true, editar: true, eliminar: true },
+                ventas: { ver: true, crear: true, editar: true, eliminar: true },
+                caja: { ver: true, abrir: true, cerrar: true },
+                tickets: { ver: true, cancelar: true, reimprimir: true },
+                reportes: { ver: true },
+                usuarios: { ver: true, crear: true, editar: true, eliminar: true },
+                configuracion: { ver: true },
+              },
+              pos: {
+                acceso: true,
+                aplicarDescuentos: true,
+                cancelarVenta: true,
+                cambiarPrecios: true,
+                abrirCajon: true,
+                verCostos: true,
+                devoluciones: true,
+              },
+            },
+          },
+        });
+
+        const perfilCajero = await tx.perfil.create({
+          data: {
+            organizacionId: organizacion.id,
+            nombre: 'Cajero / Vendedor',
+            descripcion: 'Operación en Punto de Venta, atención a clientes y cobros.',
+            esAdmin: false,
+            activo: true,
+            permisos: {
+              modulos: {
+                inicio: { ver: true },
+                clientes: { ver: true, crear: true, editar: false, eliminar: false },
+                articulos: { ver: true, crear: false, editar: false, eliminar: false },
+                stock: { ver: false, crear: false, editar: false, eliminar: false },
+                promociones: { ver: true, crear: false, editar: false, eliminar: false },
+                ventas: { ver: true, crear: true, editar: false, eliminar: false },
+                caja: { ver: true, abrir: true, cerrar: true },
+                tickets: { ver: true, cancelar: false, reimprimir: true },
+                reportes: { ver: false },
+                usuarios: { ver: false, crear: false, editar: false, eliminar: false },
+                configuracion: { ver: false },
+              },
+              pos: {
+                acceso: true,
+                aplicarDescuentos: false,
+                cancelarVenta: false,
+                cambiarPrecios: false,
+                abrirCajon: true,
+                verCostos: false,
+                devoluciones: false,
+              },
+            },
+          },
+        });
+
+        // E) Crear Usuario Administrador (activo directamente)
         const admin = await tx.usuario.create({
           data: {
             organizacionId: organizacion.id,
             sucursalId: sucursal.id,
+            perfilId: perfilAdmin.id,
             nombre: dto.adminNombre.trim(),
             email: dto.adminCorreo.toLowerCase().trim(),
             telefono: dto.adminTelefono ? dto.adminTelefono.trim() : null,
             password: hashedAdminPassword,
             pin: hashedAdminPin,
-            rol: 'ADMIN',
             activo: true,
           },
         });
 
-        // E) Crear Usuario Vendedor (si se proporcionaron datos)
+        // F) Crear Usuario Vendedor (si se proporcionaron datos)
         let vendedor: any = null;
         if (
           dto.vendedorNombre &&
@@ -139,12 +208,12 @@ export class OrganizacionesService {
             data: {
               organizacionId: organizacion.id,
               sucursalId: sucursal.id,
+              perfilId: perfilCajero.id,
               nombre: dto.vendedorNombre.trim(),
               email: dto.vendedorCorreo.toLowerCase().trim(),
               telefono: dto.vendedorTelefono ? dto.vendedorTelefono.trim() : null,
               password: hashedVendedorPassword,
               pin: hashedVendedorPin,
-              rol: 'VENDEDOR',
               activo: true,
             },
           });
@@ -272,7 +341,8 @@ export class OrganizacionesService {
             nombre: admin.nombre,
             email: admin.email,
             telefono: admin.telefono,
-            rol: admin.rol,
+            perfilId: admin.perfilId,
+            perfilNombre: perfilAdmin.nombre,
           },
           vendedor: vendedor
             ? {
@@ -280,7 +350,8 @@ export class OrganizacionesService {
                 nombre: vendedor.nombre,
                 email: vendedor.email,
                 telefono: vendedor.telefono,
-                rol: vendedor.rol,
+                perfilId: vendedor.perfilId,
+                perfilNombre: perfilCajero.nombre,
               }
             : null,
           suscripcion: {
