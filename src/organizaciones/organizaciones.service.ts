@@ -407,7 +407,14 @@ export class OrganizacionesService {
             nombre: true,
             email: true,
             telefono: true,
-            rol: true,
+            perfilId: true,
+            perfil: {
+              select: {
+                id: true,
+                nombre: true,
+                esAdmin: true,
+              },
+            },
             activo: true,
             sucursalId: true,
             createdAt: true,
