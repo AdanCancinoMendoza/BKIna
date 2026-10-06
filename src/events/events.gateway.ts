@@ -63,6 +63,38 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   }
 
+  emitirArticuloCreado(articulo: any, room?: string) {
+    if (room) {
+      this.server.to(room).emit('articulo:creado', articulo);
+    } else {
+      this.server.emit('articulo:creado', articulo);
+    }
+  }
+
+  emitirArticuloActualizado(articulo: any, room?: string) {
+    if (room) {
+      this.server.to(room).emit('articulo:actualizado', articulo);
+    } else {
+      this.server.emit('articulo:actualizado', articulo);
+    }
+  }
+
+  emitirArticuloEliminado(articuloId: string, room?: string) {
+    if (room) {
+      this.server.to(room).emit('articulo:eliminado', { id: articuloId });
+    } else {
+      this.server.emit('articulo:eliminado', { id: articuloId });
+    }
+  }
+
+  emitirCatalogoPrecargado(data: { organizacionId: string; count: number }, room?: string) {
+    if (room) {
+      this.server.to(room).emit('catalogo:precargado', data);
+    } else {
+      this.server.emit('catalogo:precargado', data);
+    }
+  }
+
   @SubscribeMessage('ping')
   handlePing() {
     return { event: 'pong', time: new Date().toISOString() };
