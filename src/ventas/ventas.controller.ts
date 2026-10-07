@@ -14,4 +14,24 @@ export class VentasController {
   async obtenerVentas(@Param('organizacionId') organizacionId: string) {
     return this.ventasService.obtenerVentas(organizacionId);
   }
+
+  @Get('resumen/:organizacionId')
+  async obtenerResumenVentas(@Param('organizacionId') organizacionId: string) {
+    return this.ventasService.obtenerResumenVentas(organizacionId);
+  }
+
+  @Post('campanas')
+  async crearCampana(@Body() body: any) {
+    return this.ventasService.crearCampana(body);
+  }
+
+  @Get('campanas/:organizacionId')
+  async obtenerCampanas(@Param('organizacionId') organizacionId: string) {
+    return this.ventasService.obtenerCampanas(organizacionId);
+  }
+
+  @Post('campanas/enviar')
+  async enviarCampana(@Body() body: any) {
+    return this.ventasService.enviarCampana(body);
+  }
 }

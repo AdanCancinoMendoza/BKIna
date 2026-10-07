@@ -21,6 +21,7 @@ model Organizacion {
   municipio    String?
   codigoPostal String?
   telefono     String?
+  whatsapp     String?
   email        String?
   logo         String?
   createdAt    DateTime @default(now())
@@ -303,5 +304,7 @@ model Campana {
   mensaje        String
   estado         String       @default("BORRADOR") // "BORRADOR", "ENVIADA", "PROGRAMADA"
   fechaEnvio     DateTime?
+  totalDestinatarios Int      @default(0)
+  enviados       Int          @default(0)
   createdAt      DateTime     @default(now())
 }

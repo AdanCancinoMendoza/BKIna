@@ -432,4 +432,27 @@ export class OrganizacionesService {
 
     return organizacion;
   }
+
+  async update(id: string, data: Partial<{ nombre: string; telefono: string; whatsapp: string; email: string; direccion: string; rfc: string; logo: string }>) {
+    let org = await this.prisma.organizacion.findUnique({ where: { id } });
+    if (!org) {
+      org = await this.prisma.organizacion.findFirst();
+    }
+    if (!org) {
+      throw new NotFoundException('Organización no encontrada');
+    }
+
+    return this.prisma.organizacion.update({
+      where: { id: org.id },
+      data: {
+        ...(data.nombre && { nombre: data.nombre.trim() }),
+        ...(data.telefono !== undefined && { telefono: data.telefono?.trim() || null }),
+        ...(data.whatsapp !== undefined && { whatsapp: data.whatsapp?.trim() || null }),
+        ...(data.email !== undefined && { email: data.email?.trim() || null }),
+        ...(data.direccion !== undefined && { direccion: data.direccion?.trim() || null }),
+        ...(data.rfc !== undefined && { rfc: data.rfc?.trim() || null }),
+        ...(data.logo !== undefined && { logo: data.logo || null }),
+      },
+    });
+  }
 }
