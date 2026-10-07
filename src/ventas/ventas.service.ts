@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { EventsGateway } from '../events/events.gateway.js';
 
@@ -46,17 +46,22 @@ export class VentasService {
         }
       }
 
-      // Asegurar que los artículos existan para evitar violaciones de clave foránea
+      // Asegurar que los artículos existan y verificar disponibilidad de existencias
       const processedDetalles: Array<{ articuloId: string; cantidad: number; precioUnitario: number; subtotal: number }> = [];
       for (const d of data.detalles) {
         let artId = String(d.articuloId);
-        const artExists = await tx.articulo.findUnique({ where: { id: artId } });
-        if (!artExists) {
-          const artByCode = await tx.articulo.findFirst({
+        let art = await tx.articulo.findUnique({
+          where: { id: artId },
+          include: { inventarios: { where: { sucursalId: resolvedSucursalId } } },
+        });
+
+        if (!art) {
+          art = await tx.articulo.findFirst({
             where: { organizacionId: data.organizacionId, codigo: artId },
+            include: { inventarios: { where: { sucursalId: resolvedSucursalId } } },
           });
-          if (artByCode) {
-            artId = artByCode.id;
+          if (art) {
+            artId = art.id;
           } else {
             const nuevoArt = await tx.articulo.create({
               data: {
@@ -66,11 +71,30 @@ export class VentasService {
                 precioVenta: d.precioUnitario,
                 precioCompra: 0,
                 unidad: 'Pieza',
+                stockIlimitado: true, // Venta rápida por defecto
               },
             });
             artId = nuevoArt.id;
+            art = nuevoArt;
           }
         }
+
+        // Validación estricta: Si el artículo no es ilimitado, verificar existencias reales
+        if (art && !art.stockIlimitado) {
+          const invSucursal = art.inventarios?.[0];
+          const stockActual = invSucursal?.stockActual ?? 0;
+          if (stockActual <= 0) {
+            throw new BadRequestException(
+              `El producto "${art.nombre}" está agotado (0 existencias). No es posible venderlo.`
+            );
+          }
+          if (stockActual < Number(d.cantidad)) {
+            throw new BadRequestException(
+              `Existencias insuficientes para "${art.nombre}". Stock disponible: ${stockActual}, solicitado: ${d.cantidad}.`
+            );
+          }
+        }
+
         processedDetalles.push({
           articuloId: artId,
           cantidad: Number(d.cantidad),
@@ -127,8 +151,14 @@ export class VentasService {
         }
       }
 
-      // Actualizar inventario de cada artículo vendido
+      // Actualizar inventario de cada artículo vendido (solo si no es stock ilimitado)
       for (const item of processedDetalles) {
+        const art = await tx.articulo.findUnique({ where: { id: item.articuloId } });
+        if (art?.stockIlimitado) {
+          // Producto con existencias ilimitadas para ventas rápidas: omitir descuento
+          continue;
+        }
+
         const inv = await tx.inventario.upsert({
           where: {
             sucursalId_articuloId: {

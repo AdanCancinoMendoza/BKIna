@@ -55,6 +55,14 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     }
   }
 
+  emitirMovimientoStock(movimiento: any, room?: string) {
+    if (room) {
+      this.server.to(room).emit('inventario:movimiento', movimiento);
+    } else {
+      this.server.emit('inventario:movimiento', movimiento);
+    }
+  }
+
   emitirEstadoTerminal(data: { terminalId: string; estado: string }, room?: string) {
     if (room) {
       this.server.to(room).emit('terminal:estado', data);
@@ -92,6 +100,30 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
       this.server.to(room).emit('catalogo:precargado', data);
     } else {
       this.server.emit('catalogo:precargado', data);
+    }
+  }
+
+  emitirClienteCreado(cliente: any, room?: string) {
+    if (room) {
+      this.server.to(room).emit('cliente:creado', cliente);
+    } else {
+      this.server.emit('cliente:creado', cliente);
+    }
+  }
+
+  emitirClienteActualizado(cliente: any, room?: string) {
+    if (room) {
+      this.server.to(room).emit('cliente:actualizado', cliente);
+    } else {
+      this.server.emit('cliente:actualizado', cliente);
+    }
+  }
+
+  emitirClienteEliminado(clienteId: string, room?: string) {
+    if (room) {
+      this.server.to(room).emit('cliente:eliminado', { id: clienteId });
+    } else {
+      this.server.emit('cliente:eliminado', { id: clienteId });
     }
   }
 

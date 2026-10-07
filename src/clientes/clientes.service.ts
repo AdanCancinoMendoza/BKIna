@@ -1,9 +1,13 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { EventsGateway } from '../events/events.gateway.js';
 
 @Injectable()
 export class ClientesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly eventsGateway: EventsGateway,
+  ) {}
 
   async findAll(organizacionId?: string, search?: string, localidad?: string) {
     const where: any = {};
@@ -156,7 +160,7 @@ export class ClientesService {
     saldo?: number;
     descuento?: number;
   }) {
-    return this.prisma.cliente.create({
+    const cliente = await this.prisma.cliente.create({
       data: {
         organizacionId: data.organizacionId,
         nombre: data.nombre.trim(),
@@ -169,6 +173,9 @@ export class ClientesService {
         descuento: data.descuento ?? 0,
       },
     });
+
+    this.eventsGateway.emitirClienteCreado(cliente, `org_${data.organizacionId}`);
+    return cliente;
   }
 
   async update(
@@ -194,13 +201,23 @@ export class ClientesService {
     if (data.saldo !== undefined) updateData.saldo = data.saldo;
     if (data.descuento !== undefined) updateData.descuento = data.descuento;
 
-    return this.prisma.cliente.update({
+    const cliente = await this.prisma.cliente.update({
       where: { id },
       data: updateData,
     });
+
+    this.eventsGateway.emitirClienteActualizado(cliente, `org_${cliente.organizacionId}`);
+    return cliente;
   }
 
   async remove(id: string) {
-    return this.prisma.cliente.delete({ where: { id } });
+    const cliente = await this.prisma.cliente.findUnique({ where: { id } });
+    if (!cliente) {
+      throw new NotFoundException('Cliente no encontrado');
+    }
+
+    await this.prisma.cliente.delete({ where: { id } });
+    this.eventsGateway.emitirClienteEliminado(id, `org_${cliente.organizacionId}`);
+    return { success: true, id };
   }
 }

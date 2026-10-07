@@ -25,6 +25,14 @@ export class CreateArticuloDto {
   @IsOptional()
   unidad?: string;
 
+  @IsBoolean()
+  @IsOptional()
+  necesitaBascula?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  stockIlimitado?: boolean;
+
   @IsString()
   @IsOptional()
   imagen?: string;
@@ -78,6 +86,14 @@ export class UpdateArticuloDto {
   @IsString()
   @IsOptional()
   unidad?: string;
+
+  @IsBoolean()
+  @IsOptional()
+  necesitaBascula?: boolean;
+
+  @IsBoolean()
+  @IsOptional()
+  stockIlimitado?: boolean;
 
   @IsString()
   @IsOptional()

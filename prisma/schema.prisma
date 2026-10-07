@@ -36,6 +36,7 @@ model Organizacion {
   promociones   Promocion[]
   campanas      Campana[]
   suscripciones Suscripcion[]
+  unidadesMedida UnidadMedida[]
 }
 
 model Suscripcion {
@@ -155,6 +156,8 @@ model Articulo {
   precioCompra   Decimal      @db.Decimal(10, 2)
   precioVenta    Decimal      @db.Decimal(10, 2)
   unidad         String       @default("Pieza") // "Pieza", "Kg", "Ltr", etc.
+  necesitaBascula Boolean     @default(false)   // ¿Requiere pesaje en báscula / balanza para imprimir etiqueta?
+  stockIlimitado Boolean      @default(false)   // ¿Permite ventas rápidas sin control de inventario / existencias ilimitadas?
   imagen         String?
   activo         Boolean      @default(true)
   createdAt      DateTime     @default(now())
@@ -165,6 +168,21 @@ model Articulo {
   movimientosStock MovimientoStock[]
 
   @@unique([organizacionId, codigo])
+}
+
+model UnidadMedida {
+  id              String        @id @default(uuid())
+  organizacionId  String?
+  organizacion    Organizacion? @relation(fields: [organizacionId], references: [id], onDelete: Cascade)
+  nombre          String
+  abreviatura     String
+  descripcion     String?
+  tipo            String        @default("conteo") // "conteo", "peso", "volumen", "longitud", "empaque"
+  necesitaBascula Boolean       @default(false)    // ¿Requiere pesaje en báscula para imprimir etiqueta?
+  activo          Boolean       @default(true)
+  createdAt       DateTime      @default(now())
+
+  @@unique([organizacionId, nombre])
 }
 
 model Inventario {
