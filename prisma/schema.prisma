@@ -213,6 +213,7 @@ model Cliente {
   localidad      String?
   puntos         Int          @default(0)
   saldo          Decimal      @default(0.00) @db.Decimal(10, 2)
+  descuento      Decimal      @default(0.00) @db.Decimal(5, 2) // % de descuento preferencial (ej. 5.00 = 5%)
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
 
@@ -240,6 +241,7 @@ model Venta {
   usuario        Usuario?     @relation(fields: [usuarioId], references: [id], onDelete: SetNull)
 
   subtotal   Decimal     @db.Decimal(10, 2)
+  descuento  Decimal     @default(0.00) @db.Decimal(10, 2)
   impuesto   Decimal     @db.Decimal(10, 2)
   total      Decimal     @db.Decimal(10, 2)
   metodoPago String      // "Efectivo", "Tarjeta", "Transferencia"

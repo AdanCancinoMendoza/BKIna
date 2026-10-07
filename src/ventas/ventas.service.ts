@@ -16,29 +16,84 @@ export class VentasService {
     clienteId?: string;
     usuarioId?: string;
     subtotal: number;
+    descuento?: number;
     impuesto: number;
     total: number;
     metodoPago: string;
+    puntosCanjeados?: number;
     detalles: Array<{ articuloId: string; cantidad: number; precioUnitario: number; subtotal: number }>;
   }) {
     const nuevaVenta = await this.prisma.$transaction(async (tx: any) => {
       const count = await tx.venta.count({ where: { organizacionId: data.organizacionId } });
       const folio = `T-${(count + 1).toString().padStart(6, '0')}`;
 
+      // Resolver sucursalId si no viene especificada
+      let resolvedSucursalId = data.sucursalId;
+      if (!resolvedSucursalId) {
+        const suc = await tx.sucursal.findFirst({
+          where: { organizacionId: data.organizacionId },
+        });
+        if (suc) {
+          resolvedSucursalId = suc.id;
+        } else {
+          const nuevaSuc = await tx.sucursal.create({
+            data: {
+              nombre: 'Sucursal Principal',
+              organizacionId: data.organizacionId,
+            },
+          });
+          resolvedSucursalId = nuevaSuc.id;
+        }
+      }
+
+      // Asegurar que los artículos existan para evitar violaciones de clave foránea
+      const processedDetalles: Array<{ articuloId: string; cantidad: number; precioUnitario: number; subtotal: number }> = [];
+      for (const d of data.detalles) {
+        let artId = String(d.articuloId);
+        const artExists = await tx.articulo.findUnique({ where: { id: artId } });
+        if (!artExists) {
+          const artByCode = await tx.articulo.findFirst({
+            where: { organizacionId: data.organizacionId, codigo: artId },
+          });
+          if (artByCode) {
+            artId = artByCode.id;
+          } else {
+            const nuevoArt = await tx.articulo.create({
+              data: {
+                organizacionId: data.organizacionId,
+                codigo: `ART-${Date.now().toString().slice(-6)}`,
+                nombre: (d as any).nombre || `Artículo ${artId}`,
+                precioVenta: d.precioUnitario,
+                precioCompra: 0,
+                unidad: 'Pieza',
+              },
+            });
+            artId = nuevoArt.id;
+          }
+        }
+        processedDetalles.push({
+          articuloId: artId,
+          cantidad: Number(d.cantidad),
+          precioUnitario: Number(d.precioUnitario),
+          subtotal: Number(d.subtotal),
+        });
+      }
+
       const venta = await tx.venta.create({
         data: {
           folio,
           organizacionId: data.organizacionId,
-          sucursalId: data.sucursalId,
-          terminalId: data.terminalId,
-          clienteId: data.clienteId,
-          usuarioId: data.usuarioId,
+          sucursalId: resolvedSucursalId,
+          terminalId: data.terminalId || null,
+          clienteId: data.clienteId || null,
+          usuarioId: data.usuarioId || null,
           subtotal: data.subtotal,
+          descuento: data.descuento || 0,
           impuesto: data.impuesto,
           total: data.total,
           metodoPago: data.metodoPago,
           detalles: {
-            create: data.detalles.map((d) => ({
+            create: processedDetalles.map((d) => ({
               articuloId: d.articuloId,
               cantidad: d.cantidad,
               precioUnitario: d.precioUnitario,
@@ -55,11 +110,29 @@ export class VentasService {
         },
       });
 
-      for (const item of data.detalles) {
+      // Si la venta está vinculada a un cliente, acumular puntos de fidelidad
+      if (data.clienteId) {
+        const puntosGanados = Math.floor(Number(data.total) / 10); // 1 punto por cada $10
+        const puntosAjuste = puntosGanados - (data.puntosCanjeados || 0);
+
+        if (puntosAjuste !== 0) {
+          await tx.cliente.update({
+            where: { id: data.clienteId },
+            data: {
+              puntos: {
+                increment: puntosAjuste,
+              },
+            },
+          });
+        }
+      }
+
+      // Actualizar inventario de cada artículo vendido
+      for (const item of processedDetalles) {
         const inv = await tx.inventario.upsert({
           where: {
             sucursalId_articuloId: {
-              sucursalId: data.sucursalId,
+              sucursalId: resolvedSucursalId,
               articuloId: item.articuloId,
             },
           },
@@ -67,7 +140,7 @@ export class VentasService {
             stockActual: { decrement: item.cantidad },
           },
           create: {
-            sucursalId: data.sucursalId,
+            sucursalId: resolvedSucursalId,
             articuloId: item.articuloId,
             stockActual: 0 - item.cantidad,
           },
@@ -76,7 +149,7 @@ export class VentasService {
         await tx.movimientoStock.create({
           data: {
             articuloId: item.articuloId,
-            sucursalId: data.sucursalId,
+            sucursalId: resolvedSucursalId,
             usuarioId: data.usuarioId,
             tipo: 'VENTA',
             cantidad: item.cantidad,
@@ -85,11 +158,14 @@ export class VentasService {
         });
 
         // Emitir actualización de stock vía WebSocket
-        this.eventsGateway.emitirStockActualizado({
-          articuloId: item.articuloId,
-          sucursalId: data.sucursalId,
-          nuevoStock: inv.stockActual,
-        }, `org_${data.organizacionId}`);
+        this.eventsGateway.emitirStockActualizado(
+          {
+            articuloId: item.articuloId,
+            sucursalId: resolvedSucursalId,
+            nuevoStock: inv.stockActual,
+          },
+          `org_${data.organizacionId}`,
+        );
       }
 
       return venta;
