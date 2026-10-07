@@ -61,7 +61,7 @@ export class TicketsService {
     return ticket;
   }
 
-  async cambiarEstado(id: string, nuevoEstado: 'DEVUELTO' | 'CANCELADO', motivo?: string) {
+  async cambiarEstado(id: string, nuevoEstado: 'DEVUELTO' | 'CANCELADO' | 'PAGADO', motivo?: string) {
     const venta = await this.prisma.venta.findUnique({
       where: { id },
       include: { detalles: true },
@@ -69,43 +69,72 @@ export class TicketsService {
 
     if (!venta) throw new NotFoundException('Ticket no encontrado');
 
+    const estadoAnterior = venta.estado;
+    if (estadoAnterior === nuevoEstado) {
+      return venta;
+    }
+
+    const stockEventsToEmit: { articuloId: string; sucursalId: string; nuevoStock: number }[] = [];
+
     const ventaActualizada = await this.prisma.$transaction(async (tx: any) => {
       // 1. Cambiar estado del ticket
       const v = await tx.venta.update({
         where: { id },
         data: { estado: nuevoEstado },
-        include: { detalles: { include: { articulo: true } }, cliente: true },
+        include: { detalles: { include: { articulo: true } }, cliente: true, sucursal: true, terminal: true, usuario: true },
       });
 
-      // 2. Reintegrar stock a la sucursal si se devuelve/cancela
-      for (const d of venta.detalles) {
-        await tx.inventario.update({
-          where: {
-            sucursalId_articuloId: {
-              sucursalId: venta.sucursalId,
-              articuloId: d.articuloId,
+      // 2. Reintegrar stock a la sucursal solo si estaba PAGADO y pasa a DEVUELTO o CANCELADO
+      if (estadoAnterior === 'PAGADO' && (nuevoEstado === 'DEVUELTO' || nuevoEstado === 'CANCELADO') && venta.sucursalId) {
+        for (const d of venta.detalles) {
+          const inv = await tx.inventario.findUnique({
+            where: {
+              sucursalId_articuloId: {
+                sucursalId: venta.sucursalId,
+                articuloId: d.articuloId,
+              },
             },
-          },
-          data: {
-            stockActual: { increment: d.cantidad },
-          },
-        });
+          });
 
-        await tx.movimientoStock.create({
-          data: {
-            articuloId: d.articuloId,
-            sucursalId: venta.sucursalId,
-            tipo: nuevoEstado === 'DEVUELTO' ? 'ENTRADA' : 'AJUSTE',
-            cantidad: d.cantidad,
-            motivo: motivo || `Ticket ${venta.folio} ${nuevoEstado.toLowerCase()}`,
-          },
-        });
+          if (inv) {
+            const updatedInv = await tx.inventario.update({
+              where: {
+                sucursalId_articuloId: {
+                  sucursalId: venta.sucursalId,
+                  articuloId: d.articuloId,
+                },
+              },
+              data: {
+                stockActual: { increment: d.cantidad },
+              },
+            });
+
+            stockEventsToEmit.push({
+              articuloId: d.articuloId,
+              sucursalId: venta.sucursalId,
+              nuevoStock: updatedInv.stockActual,
+            });
+          }
+
+          await tx.movimientoStock.create({
+            data: {
+              articuloId: d.articuloId,
+              sucursalId: venta.sucursalId,
+              tipo: nuevoEstado === 'DEVUELTO' ? 'ENTRADA' : 'AJUSTE',
+              cantidad: d.cantidad,
+              motivo: motivo || `Ticket ${venta.folio} ${nuevoEstado.toLowerCase()}`,
+            },
+          });
+        }
       }
 
       return v;
     });
 
-    // 3. Emitir evento WebSocket
+    // 3. Emitir eventos WebSocket
+    for (const evt of stockEventsToEmit) {
+      this.eventsGateway.emitirStockActualizado(evt, `org_${ventaActualizada.organizacionId}`);
+    }
     this.eventsGateway.emitirVentaCreada(ventaActualizada, `org_${ventaActualizada.organizacionId}`);
 
     return ventaActualizada;

@@ -23,9 +23,9 @@ export class TicketsController {
   @Patch(':id/estado')
   async cambiarEstado(
     @Param('id') id: string,
-    @Body('estado') estado: 'DEVUELTO' | 'CANCELADO',
-    @Body('motivo') motivo?: string,
+    @Body() body: any,
   ) {
-    return this.ticketsService.cambiarEstado(id, estado, motivo);
+    const estado = (body?.estado || '').toUpperCase() as 'DEVUELTO' | 'CANCELADO' | 'PAGADO';
+    return this.ticketsService.cambiarEstado(id, estado, body?.motivo);
   }
 }
