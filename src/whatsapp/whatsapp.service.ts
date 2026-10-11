@@ -1,4 +1,4 @@
-import { Injectable, Logger, OnModuleDestroy, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit, OnModuleDestroy, NotFoundException, BadRequestException } from '@nestjs/common';
 import path from 'node:path';
 import fs from 'node:fs';
 import baileysPkg, {
@@ -28,7 +28,7 @@ interface SessionData {
 }
 
 @Injectable()
-export class WhatsappService implements OnModuleDestroy {
+export class WhatsappService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(WhatsappService.name);
   private sessions = new Map<string, SessionData>();
   private activeCampaigns = new Map<string, boolean>();
@@ -37,6 +37,30 @@ export class WhatsappService implements OnModuleDestroy {
     private readonly prisma: PrismaService,
     private readonly eventsGateway: EventsGateway,
   ) {}
+
+  async onModuleInit() {
+    // Al inicializar el servidor, restaurar automáticamente las sesiones guardadas por cada organización
+    const baseDir = path.join(process.cwd(), 'whatsapp-sessions');
+    if (!fs.existsSync(baseDir)) return;
+
+    try {
+      const items = fs.readdirSync(baseDir, { withFileTypes: true });
+      for (const item of items) {
+        if (item.isDirectory() && item.name.startsWith('org_')) {
+          const orgId = item.name.replace('org_', '');
+          const credsFile = path.join(baseDir, item.name, 'creds.json');
+          if (fs.existsSync(credsFile)) {
+            this.logger.log(`Restaurando sesión de WhatsApp persistente para organización: ${orgId}`);
+            this.iniciarConexion(orgId).catch((err) =>
+              this.logger.warn(`No se pudo reconectar automáticamente la sesión de ${orgId}:`, err),
+            );
+          }
+        }
+      }
+    } catch (err) {
+      this.logger.error('Error al inicializar sesiones de WhatsApp por organización:', err);
+    }
+  }
 
   onModuleDestroy() {
     // Cerrar todas las sesiones al apagar el servidor
@@ -231,6 +255,15 @@ export class WhatsappService implements OnModuleDestroy {
             this.logger.error('Error al eliminar credenciales tras logout:', e);
           }
 
+          try {
+            await this.prisma.organizacion.update({
+              where: { id: resolvedOrgId },
+              data: { whatsapp: null },
+            });
+          } catch (e) {
+            // Ignorar si la organización no existe
+          }
+
           this.eventsGateway.emitirWhatsAppDesconectado(
             { organizacionId: resolvedOrgId },
             `org_${resolvedOrgId}`,
@@ -287,6 +320,15 @@ export class WhatsappService implements OnModuleDestroy {
     }
 
     this.sessions.delete(resolvedOrgId);
+
+    try {
+      await this.prisma.organizacion.update({
+        where: { id: resolvedOrgId },
+        data: { whatsapp: null },
+      });
+    } catch (err) {
+      // Silenciar error si la organización no existe
+    }
 
     this.eventsGateway.emitirWhatsAppDesconectado(
       { organizacionId: resolvedOrgId },
