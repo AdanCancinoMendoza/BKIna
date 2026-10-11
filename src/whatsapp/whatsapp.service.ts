@@ -101,7 +101,7 @@ export class WhatsappService implements OnModuleDestroy {
     }
     const resolvedOrgId = org?.id || organizacionId;
 
-    // Si ya está conectado, devolver el estado actual
+    // Si ya está conectado, devolver el estado actual sin reiniciar conexión
     const actual = this.sessions.get(resolvedOrgId);
     if (actual && actual.estado === 'CONECTADO' && actual.sock) {
       return {
@@ -111,14 +111,33 @@ export class WhatsappService implements OnModuleDestroy {
       };
     }
 
+    // Si ya hay una generación de QR activa con un código vigente, devolverlo sin recrear el socket
+    if (actual && actual.sock && actual.estado === 'GENERANDO_QR' && actual.qrCode) {
+      return {
+        estado: 'GENERANDO_QR',
+        qrCode: actual.qrCode,
+        info: actual.info,
+      };
+    }
+
+    // Cerrar limpiamente socket previo si existía para evitar colisiones
+    if (actual?.sock) {
+      try {
+        actual.sock.end?.();
+      } catch (e) {
+        // Silenciar error de cierre
+      }
+    }
+
     const sessionDir = this.getSessionPath(resolvedOrgId);
+    const tieneCreds = fs.existsSync(path.join(sessionDir, 'creds.json'));
     const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
 
     const sessionData: SessionData = {
       sock: null,
       qrCode: null,
-      estado: 'GENERANDO_QR',
-      info: null,
+      estado: tieneCreds ? 'CONECTADO' : 'GENERANDO_QR',
+      info: actual?.info || null,
       reconnectAttempts: actual?.reconnectAttempts || 0,
     };
     this.sessions.set(resolvedOrgId, sessionData);
@@ -303,6 +322,12 @@ export class WhatsappService implements OnModuleDestroy {
       const [onWa] = await session.sock.onWhatsApp(jid);
       if (onWa && onWa.exists) {
         jid = onWa.jid;
+      } else if (rawPhone.startsWith('52') && !rawPhone.startsWith('521') && rawPhone.length === 12) {
+        const mexicanMobileJid = `521${rawPhone.slice(2)}@s.whatsapp.net`;
+        const [onWaMobile] = await session.sock.onWhatsApp(mexicanMobileJid);
+        if (onWaMobile && onWaMobile.exists) {
+          jid = onWaMobile.jid;
+        }
       }
     } catch (e) {
       // Continuar con jid por defecto

@@ -130,25 +130,22 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
   emitirWhatsAppQR(data: { qrCode: string; organizacionId: string }, room?: string) {
     if (room) {
       this.server.to(room).emit('whatsapp:qr', data);
-    } else {
-      this.server.emit('whatsapp:qr', data);
     }
+    this.server.emit('whatsapp:qr', data);
   }
 
   emitirWhatsAppConectado(data: { organizacionId: string; telefono?: string; usuario?: any }, room?: string) {
     if (room) {
       this.server.to(room).emit('whatsapp:conectado', data);
-    } else {
-      this.server.emit('whatsapp:conectado', data);
     }
+    this.server.emit('whatsapp:conectado', data);
   }
 
   emitirWhatsAppDesconectado(data: { organizacionId: string }, room?: string) {
     if (room) {
       this.server.to(room).emit('whatsapp:desconectado', data);
-    } else {
-      this.server.emit('whatsapp:desconectado', data);
     }
+    this.server.emit('whatsapp:desconectado', data);
   }
 
   emitirCampanaProgreso(data: { campanaId: string; total: number; enviados: number; cliente?: string; estado: string }, room?: string) {
