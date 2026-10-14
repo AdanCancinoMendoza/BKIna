@@ -16,6 +16,7 @@ import { CajaModule } from './caja/caja.module.js';
 import { ArticulosModule } from './articulos/articulos.module.js';
 import { PerfilesModule } from './perfiles/perfiles.module.js';
 import { WhatsappModule } from './whatsapp/whatsapp.module.js';
+import { KeepAliveModule } from './keep-alive/keep-alive.module.js';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { WhatsappModule } from './whatsapp/whatsapp.module.js';
       isGlobal: true,
     }),
 
+    KeepAliveModule,
     PrismaModule,
     EventsModule,
     SupabaseModule,
