@@ -49,6 +49,7 @@ model Organizacion {
   unidadesMedida UnidadMedida[]
   eventosCalendario EventoCalendario[]
   cortesCaja    CorteCaja[]
+  proveedores   Proveedor[]
 }
 
 model Suscripcion {
@@ -171,6 +172,8 @@ model Articulo {
   familia        Familia?     @relation(fields: [familiaId], references: [id], onDelete: SetNull)
   subfamiliaId   String?
   subfamilia     Subfamilia?  @relation(fields: [subfamiliaId], references: [id], onDelete: SetNull)
+  proveedorId    String?
+  proveedor      Proveedor?   @relation(fields: [proveedorId], references: [id], onDelete: SetNull)
   codigo         String       // SKU / Código de barras
   nombre         String
   descripcion    String?
@@ -192,6 +195,7 @@ model Articulo {
   @@index([organizacionId, activo])
   @@index([familiaId])
   @@index([subfamiliaId])
+  @@index([proveedorId])
 }
 
 model UnidadMedida {
@@ -394,5 +398,39 @@ model CorteCaja {
   updatedAt           DateTime     @updatedAt
 
   @@index([organizacionId, fecha])
+}
+
+model Proveedor {
+  id             String       @id @default(uuid())
+  organizacionId String
+  organizacion   Organizacion @relation(fields: [organizacionId], references: [id], onDelete: Cascade)
+  nombre         String       // Razón Social o Nombre Comercial
+  contacto       String?      // Nombre del representante o asesor comercial
+  rfc            String?
+  telefono       String?
+  whatsapp       String?
+  email          String?
+  direccion      String?
+  ciudad         String?
+  estado         String?
+  codigoPostal   String?
+  categoria      String?      // Giro comercial: "Alimentos y Bebidas", "Abarrotes", "Lácteos", "Materia Prima", "Limpieza", "Empaques", "Servicios", etc.
+  diasCredito    Int          @default(0) // Días de crédito: 0 = Contado, 15, 30, etc.
+  limiteCredito  Decimal      @default(0.00) @db.Decimal(10, 2)
+  saldoPendiente Decimal      @default(0.00) @db.Decimal(10, 2)
+  banco          String?      // BBVA, Banorte, Santander, etc.
+  cuentaBancaria String?      // Número de cuenta o tarjeta
+  clabe          String?      // CLABE interbancaria (18 dígitos)
+  notas          String?      // Días de entrega, horarios, condiciones
+  activo         Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  articulos      Articulo[]
+
+  @@index([organizacionId, activo])
+  @@index([organizacionId, createdAt(sort: Desc)])
+  @@index([telefono])
+  @@index([nombre])
 }
 
