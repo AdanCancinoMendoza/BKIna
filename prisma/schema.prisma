@@ -24,6 +24,15 @@ model Organizacion {
   whatsapp     String?
   email        String?
   logo         String?
+  regimenFiscal String?
+  ivaActivo    Boolean  @default(true)
+  porcentajeIva Decimal @default(16.00) @db.Decimal(5, 2)
+  temaId       String?  @default("gold")
+  colorPrimario String? @default("#D8A814")
+  colorSecundario String? @default("#050505")
+  fondoPersonalizado String? @default("#F7F7F7")
+  tipografia   String?  @default("sans")
+  configuracionTema Json?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
@@ -38,6 +47,8 @@ model Organizacion {
   campanas      Campana[]
   suscripciones Suscripcion[]
   unidadesMedida UnidadMedida[]
+  eventosCalendario EventoCalendario[]
+  cortesCaja    CorteCaja[]
 }
 
 model Suscripcion {
@@ -68,18 +79,24 @@ model Sucursal {
   inventarios      Inventario[]
   movimientosStock MovimientoStock[]
   ventas           Venta[]
+
+  @@index([organizacionId])
 }
 
 model Terminal {
-  id         String   @id @default(uuid())
-  sucursalId String
-  sucursal   Sucursal @relation(fields: [sucursalId], references: [id], onDelete: Cascade)
-  nombre     String   // Ej. "Caja 01", "Caja 02"
-  estado     String   @default("Cerrada") // "Abierta", "Cerrada"
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id                 String   @id @default(uuid())
+  sucursalId         String
+  sucursal           Sucursal @relation(fields: [sucursalId], references: [id], onDelete: Cascade)
+  nombre             String   // Ej. "Caja 01", "Caja 02"
+  estado             String   @default("Cerrada") // "Abierta", "Cerrada"
+  perfilesPermitidos Json?    // Perfiles autorizados para operar esta terminal
+  usuarioEncargadoId String?  // ID de usuario cajero asignado
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
 
   ventas Venta[]
+
+  @@index([sucursalId])
 }
 
 model Perfil {
@@ -118,6 +135,9 @@ model Usuario {
 
   ventas           Venta[]
   movimientosStock MovimientoStock[]
+
+  @@index([organizacionId, activo])
+  @@index([sucursalId])
 }
 
 model Familia {
@@ -169,6 +189,9 @@ model Articulo {
   movimientosStock MovimientoStock[]
 
   @@unique([organizacionId, codigo])
+  @@index([organizacionId, activo])
+  @@index([familiaId])
+  @@index([subfamiliaId])
 }
 
 model UnidadMedida {
@@ -198,6 +221,7 @@ model Inventario {
   updatedAt   DateTime @updatedAt
 
   @@unique([sucursalId, articuloId])
+  @@index([articuloId])
 }
 
 enum TipoMovimiento {
@@ -219,6 +243,9 @@ model MovimientoStock {
   cantidad   Int
   motivo     String?
   createdAt  DateTime       @default(now())
+
+  @@index([sucursalId, createdAt(sort: Desc)])
+  @@index([articuloId, createdAt(sort: Desc)])
 }
 
 model Cliente {
@@ -237,6 +264,9 @@ model Cliente {
   updatedAt      DateTime     @updatedAt
 
   ventas Venta[]
+
+  @@index([organizacionId, createdAt(sort: Desc)])
+  @@index([telefono])
 }
 
 enum EstadoVenta {
@@ -268,6 +298,12 @@ model Venta {
   createdAt  DateTime    @default(now())
 
   detalles DetalleVenta[]
+
+  @@index([organizacionId, createdAt(sort: Desc)])
+  @@index([sucursalId, createdAt(sort: Desc)])
+  @@index([terminalId, estado])
+  @@index([clienteId])
+  @@index([usuarioId])
 }
 
 model DetalleVenta {
@@ -279,6 +315,9 @@ model DetalleVenta {
   cantidad       Int
   precioUnitario Decimal  @db.Decimal(10, 2)
   subtotal       Decimal  @db.Decimal(10, 2)
+
+  @@index([ventaId])
+  @@index([articuloId])
 }
 
 model Promocion {
@@ -308,3 +347,52 @@ model Campana {
   enviados       Int          @default(0)
   createdAt      DateTime     @default(now())
 }
+
+model EventoCalendario {
+  id             String       @id @default(uuid())
+  organizacionId String
+  organizacion   Organizacion @relation(fields: [organizacionId], references: [id], onDelete: Cascade)
+  tipo           String       @default("RECORDATORIO") // "PEDIDO", "RECORDATORIO", "NOTA"
+  titulo         String
+  descripcion    String?
+  fecha          String       // "YYYY-MM-DD"
+  hora           String?      // "HH:mm"
+  monto          Decimal?     @db.Decimal(10, 2)
+  clienteNombre  String?
+  telefono       String?
+  enviarWhatsapp Boolean      @default(false)
+  estado         String       @default("PENDIENTE") // "PENDIENTE", "EN_PROCESO", "COMPLETADO", "CANCELADO"
+  prioridad      String       @default("MEDIA") // "BAJA", "MEDIA", "ALTA", "URGENTE"
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+}
+
+model CorteCaja {
+  id                  String       @id @default(uuid())
+  organizacionId      String
+  organizacion        Organizacion @relation(fields: [organizacionId], references: [id], onDelete: Cascade)
+  sucursalId          String?
+  terminalId          String?
+  usuarioId           String?
+  nombreUsuario       String?
+  nombreTerminal      String?
+  tipo                String       @default("PARCIAL") // "PARCIAL", "FINAL", "X", "Z"
+  fondoInicial        Decimal      @default(0.00) @db.Decimal(12, 2)
+  ventasEfectivo      Decimal      @default(0.00) @db.Decimal(12, 2)
+  ventasTarjeta       Decimal      @default(0.00) @db.Decimal(12, 2)
+  ventasTransferencia Decimal      @default(0.00) @db.Decimal(12, 2)
+  totalVentas         Decimal      @default(0.00) @db.Decimal(12, 2)
+  entradasEfectivo    Decimal      @default(0.00) @db.Decimal(12, 2)
+  retirosEfectivo     Decimal      @default(0.00) @db.Decimal(12, 2)
+  efectivoEsperado    Decimal      @default(0.00) @db.Decimal(12, 2)
+  efectivoContado     Decimal      @default(0.00) @db.Decimal(12, 2)
+  diferencia          Decimal      @default(0.00) @db.Decimal(12, 2)
+  totalTickets        Int          @default(0)
+  notas               String?
+  fecha               DateTime     @default(now())
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+
+  @@index([organizacionId, fecha])
+}
+

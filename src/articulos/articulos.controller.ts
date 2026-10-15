@@ -230,8 +230,14 @@ export class ArticulosController {
     return this.articulosService.update(id, dto);
   }
 
+  @Delete('organizacion/:organizacionId/todos')
+  async deleteAllByOrganizacion(@Param('organizacionId') organizacionId: string) {
+    return this.articulosService.deleteAllByOrganizacion(organizacionId);
+  }
+
   @Delete(':id')
   async delete(@Param('id') id: string) {
     return this.articulosService.delete(id);
   }
 }
+

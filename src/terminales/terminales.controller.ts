@@ -1,10 +1,12 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
   Post,
+  Put,
   Query,
 } from '@nestjs/common';
 import { TerminalesService } from './terminales.service.js';
@@ -14,8 +16,11 @@ export class TerminalesController {
   constructor(private readonly terminalesService: TerminalesService) {}
 
   @Get()
-  async findAll(@Query('sucursalId') sucursalId?: string) {
-    return this.terminalesService.findAll(sucursalId);
+  async findAll(
+    @Query('sucursalId') sucursalId?: string,
+    @Query('organizacionId') organizacionId?: string,
+  ) {
+    return this.terminalesService.findAll(sucursalId, organizacionId);
   }
 
   @Get(':id')
@@ -28,11 +33,21 @@ export class TerminalesController {
     return this.terminalesService.create(body);
   }
 
+  @Put(':id')
+  async update(@Param('id') id: string, @Body() body: any) {
+    return this.terminalesService.update(id, body);
+  }
+
   @Patch(':id/estado')
   async updateEstado(
     @Param('id') id: string,
     @Body('estado') estado: 'Abierta' | 'Cerrada',
   ) {
     return this.terminalesService.updateEstado(id, estado);
+  }
+
+  @Delete(':id')
+  async remove(@Param('id') id: string) {
+    return this.terminalesService.remove(id);
   }
 }

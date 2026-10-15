@@ -433,7 +433,27 @@ export class OrganizacionesService {
     return organizacion;
   }
 
-  async update(id: string, data: Partial<{ nombre: string; telefono: string; whatsapp: string; email: string; direccion: string; rfc: string; logo: string }>) {
+  async update(
+    id: string,
+    data: Partial<{
+      nombre: string;
+      telefono: string;
+      whatsapp: string;
+      email: string;
+      direccion: string;
+      rfc: string;
+      logo: string;
+      regimenFiscal: string;
+      ivaActivo: boolean;
+      porcentajeIva: number;
+      temaId: string;
+      colorPrimario: string;
+      colorSecundario: string;
+      fondoPersonalizado: string;
+      tipografia: string;
+      configuracionTema: any;
+    }>,
+  ) {
     let org = await this.prisma.organizacion.findUnique({ where: { id } });
     if (!org) {
       org = await this.prisma.organizacion.findFirst();
@@ -452,6 +472,15 @@ export class OrganizacionesService {
         ...(data.direccion !== undefined && { direccion: data.direccion?.trim() || null }),
         ...(data.rfc !== undefined && { rfc: data.rfc?.trim() || null }),
         ...(data.logo !== undefined && { logo: data.logo || null }),
+        ...(data.regimenFiscal !== undefined && { regimenFiscal: data.regimenFiscal?.trim() || null }),
+        ...(data.ivaActivo !== undefined && { ivaActivo: Boolean(data.ivaActivo) }),
+        ...(data.porcentajeIva !== undefined && { porcentajeIva: Number(data.porcentajeIva) }),
+        ...(data.temaId !== undefined && { temaId: data.temaId?.trim() || 'gold' }),
+        ...(data.colorPrimario !== undefined && { colorPrimario: data.colorPrimario?.trim() || null }),
+        ...(data.colorSecundario !== undefined && { colorSecundario: data.colorSecundario?.trim() || null }),
+        ...(data.fondoPersonalizado !== undefined && { fondoPersonalizado: data.fondoPersonalizado?.trim() || null }),
+        ...(data.tipografia !== undefined && { tipografia: data.tipografia?.trim() || null }),
+        ...(data.configuracionTema !== undefined && { configuracionTema: data.configuracionTema }),
       },
     });
   }

@@ -4,6 +4,9 @@ import { EventsGateway } from '../events/events.gateway.js';
 
 @Injectable()
 export class VentasService {
+  // Caché en memoria para mitigar ráfagas de consultas simultáneas (TTL de 15 segundos)
+  private readonly resumenCache = new Map<string, { data: any; expiresAt: number }>();
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly eventsGateway: EventsGateway,
@@ -22,10 +25,39 @@ export class VentasService {
     metodoPago: string;
     puntosCanjeados?: number;
     detalles: Array<{ articuloId: string; cantidad: number; precioUnitario: number; subtotal: number }>;
+    provisionalFolio?: string;
+    folio?: string;
+    createdAt?: string;
+    esOffline?: boolean;
   }) {
     const nuevaVenta = await this.prisma.$transaction(async (tx: any) => {
+      // 1. Idempotencia: Si viene un folio provisional (ej. venta offline sincronizada), verificar si ya existe
+      const targetFolio = data.provisionalFolio || data.folio;
+      if (targetFolio) {
+        const ventaExistente = await tx.venta.findFirst({
+          where: {
+            organizacionId: data.organizacionId,
+            folio: targetFolio,
+          },
+          include: {
+            detalles: { include: { articulo: true } },
+            cliente: true,
+            sucursal: true,
+          },
+        });
+        if (ventaExistente) {
+          // Venta ya registrada previamente en reintento: retornar existente sin duplicar inventario ni totales
+          return ventaExistente;
+        }
+      }
+
       const count = await tx.venta.count({ where: { organizacionId: data.organizacionId } });
-      const folio = `T-${(count + 1).toString().padStart(6, '0')}`;
+      const randomSuffix = Math.floor(100 + Math.random() * 900);
+      const folio = targetFolio || `T-${(count + 1).toString().padStart(6, '0')}-${randomSuffix}`;
+
+      // Invalidar caché de resumen para la organización
+      this.resumenCache.delete(data.organizacionId);
+      this.resumenCache.delete('default');
 
       // Resolver sucursalId si no viene especificada
       let resolvedSucursalId = data.sucursalId;
@@ -116,6 +148,7 @@ export class VentasService {
           impuesto: data.impuesto,
           total: data.total,
           metodoPago: data.metodoPago,
+          createdAt: data.createdAt ? new Date(data.createdAt) : undefined,
           detalles: {
             create: processedDetalles.map((d) => ({
               articuloId: d.articuloId,
@@ -207,7 +240,11 @@ export class VentasService {
     return nuevaVenta;
   }
 
-  async obtenerVentas(organizacionId: string) {
+  async obtenerVentas(
+    organizacionId: string,
+    limit = 200,
+    filters?: { desde?: string; hasta?: string; sucursalId?: string },
+  ) {
     let org = null;
     if (organizacionId && organizacionId !== 'default') {
       org = await this.prisma.organizacion.findUnique({ where: { id: organizacionId } });
@@ -217,14 +254,35 @@ export class VentasService {
     }
     const resolvedOrgId = org?.id || organizacionId;
 
+    const where: any = { organizacionId: resolvedOrgId };
+
+    if (
+      filters?.sucursalId &&
+      filters.sucursalId !== 'Todas las sucursales' &&
+      filters.sucursalId !== 'Todas'
+    ) {
+      where.sucursalId = filters.sucursalId;
+    }
+
+    if (filters?.desde || filters?.hasta) {
+      where.createdAt = {};
+      if (filters.desde) {
+        where.createdAt.gte = new Date(`${filters.desde}T00:00:00.000Z`);
+      }
+      if (filters.hasta) {
+        where.createdAt.lte = new Date(`${filters.hasta}T23:59:59.999Z`);
+      }
+    }
+
     return this.prisma.venta.findMany({
-      where: { organizacionId: resolvedOrgId },
+      where,
       include: {
         detalles: { include: { articulo: true } },
         cliente: true,
         usuario: true,
       },
       orderBy: { createdAt: 'desc' },
+      take: limit ? Math.min(Math.max(Number(limit), 1), 2000) : 200,
     });
   }
 
@@ -238,27 +296,68 @@ export class VentasService {
     }
     const resolvedOrgId = org?.id || organizacionId;
 
-    const ventas = await this.prisma.venta.findMany({
-      where: { organizacionId: resolvedOrgId },
-      include: {
-        detalles: { include: { articulo: true } },
-        cliente: true,
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+    // 1. Revisar caché en memoria (TTL de 15 segundos para absorber ráfagas concurrentes)
+    const now = Date.now();
+    const cached = this.resumenCache.get(resolvedOrgId);
+    if (cached && cached.expiresAt > now) {
+      return cached.data;
+    }
 
-    const totalIngresos = ventas.reduce((acc, v) => acc + Number(v.total), 0);
-    const totalTickets = ventas.length;
-    const ticketPromedio = totalTickets > 0 ? totalIngresos / totalTickets : 0;
+    const hace7Dias = new Date();
+    hace7Dias.setDate(hace7Dias.getDate() - 7);
+    hace7Dias.setHours(0, 0, 0, 0);
 
+    // 2. Ejecutar consultas en paralelo optimizadas con índices
+    const [agg, ultimasVentas, ventas7Dias] = await Promise.all([
+      // Agregación directa en Postgres (calcula en milisegundos sin traer miles de filas a memoria)
+      this.prisma.venta.aggregate({
+        where: { organizacionId: resolvedOrgId, estado: 'PAGADO' },
+        _sum: { total: true },
+        _count: { id: true },
+        _avg: { total: true },
+      }),
+
+      // Últimas 50 ventas con relaciones
+      this.prisma.venta.findMany({
+        where: { organizacionId: resolvedOrgId },
+        include: {
+          detalles: { include: { articulo: true } },
+          cliente: true,
+          usuario: true,
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 50,
+      }),
+
+      // Ventas de los últimos 7 días sólo campos requeridos
+      this.prisma.venta.findMany({
+        where: {
+          organizacionId: resolvedOrgId,
+          createdAt: { gte: hace7Dias },
+          estado: 'PAGADO',
+        },
+        select: {
+          total: true,
+          createdAt: true,
+          metodoPago: true,
+          clienteId: true,
+        },
+      }),
+    ]);
+
+    const totalIngresos = Number(agg._sum.total || 0);
+    const totalTickets = agg._count.id;
+    const ticketPromedio = Number(agg._avg.total || 0);
+
+    // Clientes atendidos en la última semana
     const clientesMap = new Set<string>();
-    ventas.forEach((v) => {
+    ventas7Dias.forEach((v) => {
       if (v.clienteId) clientesMap.add(v.clienteId);
     });
 
-    // Ventas agrupadas por método de pago
+    // Ventas agrupadas por método de pago (recientes)
     const metodosPagoMap: Record<string, number> = {};
-    ventas.forEach((v) => {
+    ventas7Dias.forEach((v) => {
       const m = v.metodoPago || 'Efectivo';
       metodosPagoMap[m] = (metodosPagoMap[m] || 0) + Number(v.total);
     });
@@ -274,7 +373,7 @@ export class VentasService {
       ventasPorDiaMap[key] = { fecha: diaSemana.charAt(0).toUpperCase() + diaSemana.slice(1), total: 0, tickets: 0 };
     }
 
-    ventas.forEach((v) => {
+    ventas7Dias.forEach((v) => {
       const key = new Date(v.createdAt).toISOString().split('T')[0];
       if (ventasPorDiaMap[key]) {
         ventasPorDiaMap[key].total += Number(v.total);
@@ -282,9 +381,9 @@ export class VentasService {
       }
     });
 
-    // Artículos más vendidos
+    // Artículos más vendidos (calculados desde las ventas recientes)
     const articulosCountMap: Record<string, { nombre: string; unidades: number; totalVendido: number }> = {};
-    ventas.forEach((v) => {
+    ultimasVentas.forEach((v) => {
       v.detalles.forEach((d) => {
         const artNombre = d.articulo?.nombre || 'Artículo';
         if (!articulosCountMap[artNombre]) {
@@ -299,7 +398,7 @@ export class VentasService {
       .sort((a, b) => b.unidades - a.unidades)
       .slice(0, 8);
 
-    return {
+    const resultado = {
       totalIngresos,
       totalTickets,
       ticketPromedio,
@@ -307,8 +406,16 @@ export class VentasService {
       metodosPago: Object.entries(metodosPagoMap).map(([metodo, total]) => ({ metodo, total })),
       ventasPorDia: Object.values(ventasPorDiaMap),
       topArticulos,
-      ultimasVentas: ventas.slice(0, 50),
+      ultimasVentas,
     };
+
+    // Guardar en caché con expiración de 15 segundos
+    this.resumenCache.set(resolvedOrgId, {
+      data: resultado,
+      expiresAt: now + 15000,
+    });
+
+    return resultado;
   }
 
   async crearCampana(data: { organizacionId: string; nombre: string; canal?: string; mensaje: string; estado?: string }) {

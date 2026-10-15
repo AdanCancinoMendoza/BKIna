@@ -17,6 +17,8 @@ import { ArticulosModule } from './articulos/articulos.module.js';
 import { PerfilesModule } from './perfiles/perfiles.module.js';
 import { WhatsappModule } from './whatsapp/whatsapp.module.js';
 import { KeepAliveModule } from './keep-alive/keep-alive.module.js';
+import { MantenimientoModule } from './mantenimiento/mantenimiento.module.js';
+import { CalendarioModule } from './calendario/calendario.module.js';
 
 @Module({
   imports: [
@@ -41,6 +43,8 @@ import { KeepAliveModule } from './keep-alive/keep-alive.module.js';
     CajaModule,
     ArticulosModule,
     WhatsappModule,
+    MantenimientoModule,
+    CalendarioModule,
   ],
 })
 export class AppModule {}

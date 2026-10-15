@@ -361,6 +361,38 @@ export class ArticulosService {
     return this.delete(id);
   }
 
+  async deleteAllByOrganizacion(organizacionId: string) {
+    if (!organizacionId) {
+      throw new BadRequestException('Se requiere el ID de la organización');
+    }
+
+    const totalArticulos = await this.prisma.articulo.count({
+      where: { organizacionId },
+    });
+
+    if (totalArticulos === 0) {
+      return {
+        mensaje: 'No hay artículos registrados para eliminar',
+        eliminados: 0,
+      };
+    }
+
+    // Eliminación masiva en cascada de todos los artículos de la organización
+    const res = await this.prisma.articulo.deleteMany({
+      where: { organizacionId },
+    });
+
+    // Notificar a clientes conectados para refrescar catálogo
+    if (this.eventsGateway.server) {
+      this.eventsGateway.server.to(`org_${organizacionId}`).emit('articulo:actualizado');
+    }
+
+    return {
+      mensaje: `Se eliminaron correctamente ${res.count} artículos del catálogo`,
+      eliminados: res.count,
+    };
+  }
+
   async precargarCatalogo(dto: {
     organizacionId: string;
     pais?: string;

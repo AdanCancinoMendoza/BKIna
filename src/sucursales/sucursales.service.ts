@@ -13,6 +13,26 @@ export class SucursalesService {
       where,
       include: {
         terminales: true,
+        usuarios: {
+          select: {
+            id: true,
+            nombre: true,
+            email: true,
+            telefono: true,
+            pin: true,
+            activo: true,
+            perfilId: true,
+            perfil: {
+              select: {
+                id: true,
+                nombre: true,
+                descripcion: true,
+                esAdmin: true,
+                permisos: true,
+              },
+            },
+          },
+        },
         _count: {
           select: {
             usuarios: true,

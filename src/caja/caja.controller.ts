@@ -26,4 +26,19 @@ export class CajaController {
   ) {
     return this.cajaService.cerrarCaja(terminalId, efectivoMano || 0, notas);
   }
+
+  @Get('cortes/:organizacionId')
+  async obtenerCortes(@Param('organizacionId') organizacionId: string) {
+    return this.cajaService.obtenerCortes(organizacionId);
+  }
+
+  @Get('resumen-dia/:organizacionId')
+  async obtenerResumenDia(@Param('organizacionId') organizacionId: string) {
+    return this.cajaService.obtenerResumenCortesYVentasDia(organizacionId);
+  }
+
+  @Post('corte')
+  async registrarCorte(@Body() body: any) {
+    return this.cajaService.registrarCorte(body);
+  }
 }

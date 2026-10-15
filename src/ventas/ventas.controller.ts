@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Param } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, Query } from '@nestjs/common';
 import { VentasService } from './ventas.service.js';
 
 @Controller('ventas')
@@ -11,8 +11,18 @@ export class VentasController {
   }
 
   @Get('organizacion/:organizacionId')
-  async obtenerVentas(@Param('organizacionId') organizacionId: string) {
-    return this.ventasService.obtenerVentas(organizacionId);
+  async obtenerVentas(
+    @Param('organizacionId') organizacionId: string,
+    @Query('limit') limit?: string,
+    @Query('desde') desde?: string,
+    @Query('hasta') hasta?: string,
+    @Query('sucursalId') sucursalId?: string,
+  ) {
+    return this.ventasService.obtenerVentas(
+      organizacionId,
+      limit ? parseInt(limit, 10) : 200,
+      { desde, hasta, sucursalId },
+    );
   }
 
   @Get('resumen/:organizacionId')
