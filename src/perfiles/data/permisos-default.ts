@@ -89,12 +89,12 @@ export const PERMISOS_ADMINISTRADOR: PermisosEstructura = {
 
 export const PERMISOS_CAJERO: PermisosEstructura = {
   modulos: {
-    inicio: { ver: true },
-    clientes: { ver: true, crear: true, editar: false, eliminar: false },
-    articulos: { ver: true, crear: false, editar: false, eliminar: false },
+    inicio: { ver: false },
+    clientes: { ver: false, crear: false, editar: false, eliminar: false },
+    articulos: { ver: false, crear: false, editar: false, eliminar: false },
     stock: { ver: false, crear: false, editar: false, eliminar: false },
-    promociones: { ver: true, crear: false, editar: false, eliminar: false },
-    calendario: { ver: true, crear: true, editar: false, eliminar: false },
+    promociones: { ver: false, crear: false, editar: false, eliminar: false },
+    calendario: { ver: false, crear: false, editar: false, eliminar: false },
     ventas: { ver: true, crear: true, editar: false, eliminar: false },
     caja: { ver: true, abrir: true, cerrar: true },
     tickets: { ver: true, cancelar: false, reimprimir: true },
