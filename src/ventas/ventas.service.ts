@@ -276,13 +276,57 @@ export class VentasService {
 
     return this.prisma.venta.findMany({
       where,
-      include: {
-        detalles: { include: { articulo: true } },
-        cliente: true,
-        usuario: true,
+      select: {
+        id: true,
+        folio: true,
+        organizacionId: true,
+        sucursalId: true,
+        terminalId: true,
+        clienteId: true,
+        usuarioId: true,
+        subtotal: true,
+        descuento: true,
+        impuesto: true,
+        total: true,
+        metodoPago: true,
+        estado: true,
+        createdAt: true,
+        cliente: {
+          select: {
+            id: true,
+            nombre: true,
+            telefono: true,
+            email: true,
+          },
+        },
+        usuario: {
+          select: {
+            id: true,
+            nombre: true,
+            email: true,
+          },
+        },
+        detalles: {
+          select: {
+            id: true,
+            cantidad: true,
+            precioUnitario: true,
+            subtotal: true,
+            articuloId: true,
+            articulo: {
+              select: {
+                id: true,
+                codigo: true,
+                nombre: true,
+                unidad: true,
+                imagen: true,
+              },
+            },
+          },
+        },
       },
       orderBy: { createdAt: 'desc' },
-      take: limit ? Math.min(Math.max(Number(limit), 1), 2000) : 200,
+      take: limit ? Math.min(Math.max(Number(limit), 1), 500) : 100,
     });
   }
 
@@ -317,13 +361,30 @@ export class VentasService {
         _avg: { total: true },
       }),
 
-      // Últimas 50 ventas con relaciones
+      // Últimas 50 ventas con proyección liviana (ahorro de RAM en Render)
       this.prisma.venta.findMany({
         where: { organizacionId: resolvedOrgId },
-        include: {
-          detalles: { include: { articulo: true } },
-          cliente: true,
-          usuario: true,
+        select: {
+          id: true,
+          total: true,
+          createdAt: true,
+          detalles: {
+            select: {
+              cantidad: true,
+              subtotal: true,
+              articulo: {
+                select: {
+                  nombre: true,
+                  imagen: true,
+                },
+              },
+            },
+          },
+          cliente: {
+            select: {
+              nombre: true,
+            },
+          },
         },
         orderBy: { createdAt: 'desc' },
         take: 50,

@@ -47,6 +47,7 @@ export class ProveedoresService {
         },
       },
       orderBy: { createdAt: 'desc' },
+      take: 200,
     });
 
     return proveedores.map((p) => ({

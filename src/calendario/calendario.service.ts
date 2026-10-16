@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { WhatsappService } from '../whatsapp/whatsapp.service.js';
+import { EventsGateway } from '../events/events.gateway.js';
 
 import { IsBoolean, IsNotEmpty, IsNumber, IsOptional, IsString } from 'class-validator';
 
@@ -107,6 +108,7 @@ export class CalendarioService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly whatsappService: WhatsappService,
+    private readonly eventsGateway: EventsGateway,
   ) {}
 
   async findAll(organizacionId?: string) {
@@ -155,6 +157,9 @@ export class CalendarioService {
       },
     });
 
+    // Emitir WebSocket en tiempo real
+    this.eventsGateway.emitirCitaCreada(nuevo, `org_${nuevo.organizacionId}`);
+
     let whatsappEnviado = false;
     let whatsappError: string | undefined;
 
@@ -197,14 +202,21 @@ export class CalendarioService {
       },
     });
 
+    // Emitir WebSocket en tiempo real
+    this.eventsGateway.emitirCitaActualizada(updated, `org_${updated.organizacionId}`);
+
     return updated;
   }
 
   async remove(id: string) {
-    await this.findOne(id);
+    const evento = await this.findOne(id);
     await this.prisma.eventoCalendario.delete({
       where: { id },
     });
+
+    // Emitir WebSocket en tiempo real
+    this.eventsGateway.emitirCitaEliminada(id, `org_${evento.organizacionId}`, evento.organizacionId);
+
     return { exito: true, mensaje: 'Elemento eliminado correctamente.' };
   }
 

@@ -39,121 +39,114 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     return { status: 'joined', room: data.room };
   }
 
-  emitirVentaCreada(venta: any, room?: string) {
-    if (room) {
-      this.server.to(room).emit('venta:creada', venta);
-    } else {
-      this.server.emit('venta:creada', venta);
+  private safeEmit(event: string, data: any, room?: string) {
+    if (!this.server) return;
+    try {
+      const orgId = data?.organizacionId;
+      const targetRoom = room || (orgId ? `org_${orgId}` : undefined);
+
+      if (targetRoom) {
+        this.server.to(targetRoom).emit(event, data);
+        // También emitir a sala global para clientes legacy o globales
+        this.server.emit(event, data);
+      } else {
+        this.server.emit(event, data);
+      }
+    } catch (err) {
+      this.logger.warn(`Error al emitir evento websocket ${event}:`, err);
     }
   }
 
-  emitirStockActualizado(data: { articuloId: string; sucursalId: string; nuevoStock: number }, room?: string) {
-    if (room) {
-      this.server.to(room).emit('stock:actualizado', data);
-    } else {
-      this.server.emit('stock:actualizado', data);
-    }
+  emitirVentaCreada(venta: any, room?: string) {
+    this.safeEmit('venta:creada', venta, room);
+  }
+
+  emitirStockActualizado(data: { articuloId: string; sucursalId?: string; nuevoStock: number; organizacionId?: string }, room?: string) {
+    this.safeEmit('stock:actualizado', data, room);
   }
 
   emitirMovimientoStock(movimiento: any, room?: string) {
-    if (room) {
-      this.server.to(room).emit('inventario:movimiento', movimiento);
-    } else {
-      this.server.emit('inventario:movimiento', movimiento);
-    }
+    this.safeEmit('inventario:movimiento', movimiento, room);
   }
 
-  emitirEstadoTerminal(data: { terminalId: string; estado: string }, room?: string) {
-    if (room) {
-      this.server.to(room).emit('terminal:estado', data);
-    } else {
-      this.server.emit('terminal:estado', data);
-    }
+  emitirEstadoTerminal(data: { terminalId: string; estado: string; organizacionId?: string }, room?: string) {
+    this.safeEmit('terminal:estado', data, room);
+  }
+
+  emitirCorteCaja(corte: any, room?: string) {
+    this.safeEmit('caja:corte', corte, room);
+  }
+
+  emitirCajaEstado(data: { terminalId: string; estado: string; fondoInicial?: number; organizacionId?: string }, room?: string) {
+    this.safeEmit('caja:estado', data, room);
   }
 
   emitirArticuloCreado(articulo: any, room?: string) {
-    if (room) {
-      this.server.to(room).emit('articulo:creado', articulo);
-    } else {
-      this.server.emit('articulo:creado', articulo);
-    }
+    this.safeEmit('articulo:creado', articulo, room);
   }
 
   emitirArticuloActualizado(articulo: any, room?: string) {
-    if (room) {
-      this.server.to(room).emit('articulo:actualizado', articulo);
-    } else {
-      this.server.emit('articulo:actualizado', articulo);
-    }
+    this.safeEmit('articulo:actualizado', articulo, room);
   }
 
-  emitirArticuloEliminado(articuloId: string, room?: string) {
-    if (room) {
-      this.server.to(room).emit('articulo:eliminado', { id: articuloId });
-    } else {
-      this.server.emit('articulo:eliminado', { id: articuloId });
-    }
+  emitirArticuloEliminado(articuloId: string, room?: string, organizacionId?: string) {
+    this.safeEmit('articulo:eliminado', { id: articuloId, organizacionId }, room);
   }
 
   emitirCatalogoPrecargado(data: { organizacionId: string; count: number }, room?: string) {
-    if (room) {
-      this.server.to(room).emit('catalogo:precargado', data);
-    } else {
-      this.server.emit('catalogo:precargado', data);
-    }
+    this.safeEmit('catalogo:precargado', data, room);
   }
 
   emitirClienteCreado(cliente: any, room?: string) {
-    if (room) {
-      this.server.to(room).emit('cliente:creado', cliente);
-    } else {
-      this.server.emit('cliente:creado', cliente);
-    }
+    this.safeEmit('cliente:creado', cliente, room);
   }
 
   emitirClienteActualizado(cliente: any, room?: string) {
-    if (room) {
-      this.server.to(room).emit('cliente:actualizado', cliente);
-    } else {
-      this.server.emit('cliente:actualizado', cliente);
-    }
+    this.safeEmit('cliente:actualizado', cliente, room);
   }
 
-  emitirClienteEliminado(clienteId: string, room?: string) {
-    if (room) {
-      this.server.to(room).emit('cliente:eliminado', { id: clienteId });
-    } else {
-      this.server.emit('cliente:eliminado', { id: clienteId });
-    }
+  emitirClienteEliminado(clienteId: string, room?: string, organizacionId?: string) {
+    this.safeEmit('cliente:eliminado', { id: clienteId, organizacionId }, room);
+  }
+
+  emitirProveedorCreado(proveedor: any, room?: string) {
+    this.safeEmit('proveedor:creado', proveedor, room);
+  }
+
+  emitirProveedorActualizado(proveedor: any, room?: string) {
+    this.safeEmit('proveedor:actualizado', proveedor, room);
+  }
+
+  emitirProveedorEliminado(proveedorId: string, room?: string, organizacionId?: string) {
+    this.safeEmit('proveedor:eliminado', { id: proveedorId, organizacionId }, room);
+  }
+
+  emitirCitaCreada(cita: any, room?: string) {
+    this.safeEmit('cita:creada', cita, room);
+  }
+
+  emitirCitaActualizada(cita: any, room?: string) {
+    this.safeEmit('cita:actualizada', cita, room);
+  }
+
+  emitirCitaEliminada(citaId: string, room?: string, organizacionId?: string) {
+    this.safeEmit('cita:eliminada', { id: citaId, organizacionId }, room);
   }
 
   emitirWhatsAppQR(data: { qrCode: string; organizacionId: string }, room?: string) {
-    if (room) {
-      this.server.to(room).emit('whatsapp:qr', data);
-    }
-    this.server.emit('whatsapp:qr', data);
+    this.safeEmit('whatsapp:qr', data, room);
   }
 
   emitirWhatsAppConectado(data: { organizacionId: string; telefono?: string; usuario?: any }, room?: string) {
-    if (room) {
-      this.server.to(room).emit('whatsapp:conectado', data);
-    }
-    this.server.emit('whatsapp:conectado', data);
+    this.safeEmit('whatsapp:conectado', data, room);
   }
 
   emitirWhatsAppDesconectado(data: { organizacionId: string }, room?: string) {
-    if (room) {
-      this.server.to(room).emit('whatsapp:desconectado', data);
-    }
-    this.server.emit('whatsapp:desconectado', data);
+    this.safeEmit('whatsapp:desconectado', data, room);
   }
 
   emitirCampanaProgreso(data: { campanaId: string; total: number; enviados: number; cliente?: string; estado: string }, room?: string) {
-    if (room) {
-      this.server.to(room).emit('campana:progreso', data);
-    } else {
-      this.server.emit('campana:progreso', data);
-    }
+    this.safeEmit('campana:progreso', data, room);
   }
 
   @SubscribeMessage('ping')

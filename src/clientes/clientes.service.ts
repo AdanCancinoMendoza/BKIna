@@ -36,9 +36,11 @@ export class ClientesService {
         _count: { select: { ventas: true } },
         ventas: {
           select: { total: true },
+          take: 50,
         },
       },
       orderBy: { createdAt: 'desc' },
+      take: 500,
     });
 
     return clientes.map((c) => {

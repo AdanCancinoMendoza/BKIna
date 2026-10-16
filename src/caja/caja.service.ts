@@ -81,10 +81,24 @@ export class CajaService {
       data: { estado: 'Abierta' },
     });
 
+    const termCompleta = await this.prisma.terminal.findUnique({
+      where: { id: terminalId },
+      include: { sucursal: true },
+    });
+    const orgId = termCompleta?.sucursal?.organizacionId;
+
     this.eventsGateway.emitirEstadoTerminal({
       terminalId: terminal.id,
       estado: 'Abierta',
-    });
+      organizacionId: orgId,
+    }, orgId ? `org_${orgId}` : undefined);
+
+    this.eventsGateway.emitirCajaEstado({
+      terminalId: terminal.id,
+      estado: 'Abierta',
+      fondoInicial,
+      organizacionId: orgId,
+    }, orgId ? `org_${orgId}` : undefined);
 
     return { mensaje: 'Caja abierta correctamente', terminal, fondoInicial };
   }
@@ -99,22 +113,30 @@ export class CajaService {
 
     const diferencia = efectivoMano - estado.ventasEfectivo;
 
-    this.eventsGateway.emitirEstadoTerminal({
-      terminalId: terminal.id,
-      estado: 'Cerrada',
-    });
-
     // Auto-registrar corte en la base de datos si terminal tiene sucursal / organizacion
     let corteCreado: any = null;
     const termCompleta = await this.prisma.terminal.findUnique({
       where: { id: terminalId },
       include: { sucursal: true },
     });
+    const orgId = termCompleta?.sucursal?.organizacionId;
 
-    if (termCompleta?.sucursal?.organizacionId) {
+    this.eventsGateway.emitirEstadoTerminal({
+      terminalId: terminal.id,
+      estado: 'Cerrada',
+      organizacionId: orgId,
+    }, orgId ? `org_${orgId}` : undefined);
+
+    this.eventsGateway.emitirCajaEstado({
+      terminalId: terminal.id,
+      estado: 'Cerrada',
+      organizacionId: orgId,
+    }, orgId ? `org_${orgId}` : undefined);
+
+    if (orgId) {
       corteCreado = await this.prisma.corteCaja.create({
         data: {
-          organizacionId: termCompleta.sucursal.organizacionId,
+          organizacionId: orgId,
           sucursalId: termCompleta.sucursalId,
           terminalId: termCompleta.id,
           nombreTerminal: termCompleta.nombre,
@@ -129,6 +151,8 @@ export class CajaService {
           notas: notas || null,
         },
       });
+
+      this.eventsGateway.emitirCorteCaja(corteCreado, `org_${orgId}`);
     }
 
     return {
@@ -197,6 +221,8 @@ export class CajaService {
         fecha: data.fecha ? new Date(data.fecha) : new Date(),
       },
     });
+
+    this.eventsGateway.emitirCorteCaja(corte, `org_${org.id}`);
 
     return corte;
   }

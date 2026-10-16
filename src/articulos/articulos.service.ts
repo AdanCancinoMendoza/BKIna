@@ -119,12 +119,21 @@ export class ArticulosService {
         ? art.inventarios.find((i) => i.sucursalId === params.sucursalId)?.stockActual ?? 0
         : totalStock;
 
+      const { inventarios, ...resto } = art;
+
       return {
-        ...art,
+        ...resto,
         precioCompra: Number(art.precioCompra),
         precioVenta: Number(art.precioVenta),
         stock: stockSucursal,
         totalStock,
+        inventarios: inventarios.map((inv) => ({
+          id: inv.id,
+          sucursalId: inv.sucursalId,
+          stockActual: inv.stockActual,
+          stockMinimo: inv.stockMinimo,
+          stockMaximo: inv.stockMaximo,
+        })),
       };
     });
   }
@@ -239,27 +248,67 @@ export class ArticulosService {
       },
     });
 
-    // Crear inventario inicial en las sucursales de la organización
-    const sucursales = await this.prisma.sucursal.findMany({
-      where: { organizacionId: orgId },
-      select: { id: true },
-    });
+    // Crear inventario inicial en las sucursales de la organización de forma segura
+    try {
+      const sucursales = await this.prisma.sucursal.findMany({
+        where: { organizacionId: orgId },
+        select: { id: true },
+      });
 
-    if (sucursales.length > 0) {
-      await this.prisma.inventario.createMany({
-        data: sucursales.map((suc) => ({
+      if (sucursales.length > 0) {
+        const stockInicialNum = Math.max(
+          0,
+          Math.round(Number(dto.stockInicial ?? (dto as any).stockActual ?? 0)) || 0,
+        );
+
+        const inventariosData = sucursales.map((suc) => ({
+          id: randomUUID(),
           sucursalId: suc.id,
           articuloId: nuevoArticulo.id,
-          stockActual: suc.id === dto.sucursalId ? (dto.stockInicial ?? 0) : 0,
+          stockActual: (!dto.sucursalId || suc.id === dto.sucursalId) ? stockInicialNum : 0,
           stockMinimo: 0,
           stockMaximo: 0,
-        })),
-        skipDuplicates: true,
-      });
+          updatedAt: new Date(),
+        }));
+
+        try {
+          await this.prisma.inventario.createMany({
+            data: inventariosData,
+            skipDuplicates: true,
+          });
+        } catch {
+          // Fallback seguro a inserción individual
+          for (const item of inventariosData) {
+            await this.prisma.inventario.upsert({
+              where: {
+                sucursalId_articuloId: {
+                  sucursalId: item.sucursalId,
+                  articuloId: item.articuloId,
+                },
+              },
+              create: {
+                id: item.id,
+                sucursalId: item.sucursalId,
+                articuloId: item.articuloId,
+                stockActual: item.stockActual,
+                stockMinimo: 0,
+                stockMaximo: 0,
+              },
+              update: {},
+            }).catch(() => null);
+          }
+        }
+      }
+    } catch (invErr) {
+      console.error('Error no fatal al inicializar inventarios para artículo:', invErr);
     }
 
-    // Emitir evento Socket.io
-    this.eventsGateway.emitirArticuloCreado(nuevoArticulo);
+    // Emitir evento Socket.io de forma segura
+    try {
+      this.eventsGateway.emitirArticuloCreado(nuevoArticulo);
+    } catch (wsErr) {
+      console.warn('Error no fatal al emitir evento de artículo creado:', wsErr);
+    }
 
     return {
       ...nuevoArticulo,
@@ -323,7 +372,8 @@ export class ArticulosService {
         articuloId: id,
         sucursalId: dto.sucursalId,
         nuevoStock: dto.stockActual,
-      });
+        organizacionId: actualizado.organizacionId,
+      }, `org_${actualizado.organizacionId}`);
     }
 
     const resultado = {
@@ -332,8 +382,8 @@ export class ArticulosService {
       precioVenta: Number(actualizado.precioVenta),
     };
 
-    // Emitir evento Socket.io
-    this.eventsGateway.emitirArticuloActualizado(resultado);
+    // Emitir evento Socket.io dirigido a la organización
+    this.eventsGateway.emitirArticuloActualizado(resultado, `org_${actualizado.organizacionId}`);
 
     return resultado;
   }
@@ -351,8 +401,8 @@ export class ArticulosService {
       where: { id },
     });
 
-    // Emitir evento Socket.io
-    this.eventsGateway.emitirArticuloEliminado(id);
+    // Emitir evento Socket.io dirigido a la organización
+    this.eventsGateway.emitirArticuloEliminado(id, `org_${articulo.organizacionId}`, articulo.organizacionId);
 
     return { mensaje: 'Artículo eliminado correctamente', id };
   }
@@ -877,8 +927,11 @@ export class ArticulosService {
           familia: { select: { id: true, nombre: true } },
           subfamilia: { select: { id: true, nombre: true } },
           inventarios: {
-            include: {
-              sucursal: { select: { id: true, nombre: true } },
+            select: {
+              sucursalId: true,
+              stockActual: true,
+              stockMinimo: true,
+              stockMaximo: true,
             },
           },
         },
@@ -1129,8 +1182,9 @@ export class ArticulosService {
       articuloId: dto.articuloId,
       sucursalId: sucId,
       nuevoStock: nuevoStockFinal,
-    });
-    this.eventsGateway.emitirMovimientoStock(movimiento);
+      organizacionId: resolvedOrgId,
+    }, `org_${resolvedOrgId}`);
+    this.eventsGateway.emitirMovimientoStock(movimiento, `org_${resolvedOrgId}`);
 
     return {
       exito: true,

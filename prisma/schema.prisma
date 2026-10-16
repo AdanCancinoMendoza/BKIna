@@ -62,6 +62,8 @@ model Suscripcion {
   fechaFin       DateTime
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
+
+  @@index([organizacionId, estado])
 }
 
 model Sucursal {
@@ -151,6 +153,9 @@ model Familia {
 
   subfamilias Subfamilia[]
   articulos   Articulo[]
+
+  @@index([organizacionId])
+  @@index([organizacionId, nombre])
 }
 
 model Subfamilia {
@@ -162,6 +167,8 @@ model Subfamilia {
   createdAt   DateTime @default(now())
 
   articulos Articulo[]
+
+  @@index([familiaId])
 }
 
 model Articulo {
@@ -193,6 +200,9 @@ model Articulo {
 
   @@unique([organizacionId, codigo])
   @@index([organizacionId, activo])
+  @@index([organizacionId, nombre])
+  @@index([organizacionId, familiaId])
+  @@index([organizacionId, subfamiliaId])
   @@index([familiaId])
   @@index([subfamiliaId])
   @@index([proveedorId])
@@ -211,6 +221,7 @@ model UnidadMedida {
   createdAt       DateTime      @default(now())
 
   @@unique([organizacionId, nombre])
+  @@index([organizacionId, activo])
 }
 
 model Inventario {
@@ -226,6 +237,7 @@ model Inventario {
 
   @@unique([sucursalId, articuloId])
   @@index([articuloId])
+  @@index([sucursalId, stockActual])
 }
 
 enum TipoMovimiento {
@@ -304,6 +316,9 @@ model Venta {
   detalles DetalleVenta[]
 
   @@index([organizacionId, createdAt(sort: Desc)])
+  @@index([organizacionId, folio])
+  @@index([organizacionId, estado, createdAt(sort: Desc)])
+  @@index([organizacionId, metodoPago])
   @@index([sucursalId, createdAt(sort: Desc)])
   @@index([terminalId, estado])
   @@index([clienteId])
@@ -336,6 +351,9 @@ model Promocion {
   fechaFin       DateTime
   activo         Boolean      @default(true)
   createdAt      DateTime     @default(now())
+
+  @@index([organizacionId, activo])
+  @@index([fechaInicio, fechaFin])
 }
 
 model Campana {
@@ -350,6 +368,8 @@ model Campana {
   totalDestinatarios Int      @default(0)
   enviados       Int          @default(0)
   createdAt      DateTime     @default(now())
+
+  @@index([organizacionId, estado])
 }
 
 model EventoCalendario {
@@ -369,6 +389,9 @@ model EventoCalendario {
   prioridad      String       @default("MEDIA") // "BAJA", "MEDIA", "ALTA", "URGENTE"
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
+
+  @@index([organizacionId, fecha])
+  @@index([organizacionId, estado])
 }
 
 model CorteCaja {
@@ -397,7 +420,9 @@ model CorteCaja {
   createdAt           DateTime     @default(now())
   updatedAt           DateTime     @updatedAt
 
-  @@index([organizacionId, fecha])
+  @@index([organizacionId, fecha(sort: Desc)])
+  @@index([terminalId, fecha(sort: Desc)])
+  @@index([sucursalId, fecha(sort: Desc)])
 }
 
 model Proveedor {
