@@ -371,8 +371,27 @@ export class OrganizacionesService {
     );
   }
 
+  private enmascararOrganizacion(org: any) {
+    if (!org) return org;
+    const config = (org.configuracionTema as Record<string, any>) || {};
+    if (config.geminiApiKey) {
+      const key = String(config.geminiApiKey);
+      const enmascarada =
+        key.length > 8 ? `${key.slice(0, 6)}••••••••${key.slice(-4)}` : '••••••••';
+      return {
+        ...org,
+        configuracionTema: {
+          ...config,
+          geminiApiKey: enmascarada,
+          tieneGeminiKey: true,
+        },
+      };
+    }
+    return org;
+  }
+
   async findAll() {
-    return this.prisma.organizacion.findMany({
+    const orgs = await this.prisma.organizacion.findMany({
       include: {
         _count: {
           select: {
@@ -389,6 +408,8 @@ export class OrganizacionesService {
       },
       orderBy: { createdAt: 'desc' },
     });
+
+    return orgs.map((org) => this.enmascararOrganizacion(org));
   }
 
   async findOne(id: string) {
@@ -430,7 +451,7 @@ export class OrganizacionesService {
       throw new NotFoundException('Organización no encontrada');
     }
 
-    return organizacion;
+    return this.enmascararOrganizacion(organizacion);
   }
 
   async update(
@@ -453,16 +474,52 @@ export class OrganizacionesService {
       tipografia: string;
       configuracionTema: any;
     }>,
+    adminKey?: string,
   ) {
-    let org = await this.prisma.organizacion.findUnique({ where: { id } });
-    if (!org) {
-      org = await this.prisma.organizacion.findFirst();
-    }
+    const org = await this.prisma.organizacion.findUnique({ where: { id } });
     if (!org) {
       throw new NotFoundException('Organización no encontrada');
     }
 
-    return this.prisma.organizacion.update({
+    const validAdminKey =
+      process.env.SUPERADMIN_KEY ||
+      process.env.SUPERADMIN_SECRET_KEY ||
+      'inagerlis-superadmin-2026';
+    const esSuperAdmin = Boolean(adminKey && adminKey.trim() === validAdminKey.trim());
+
+    // Sanitizar y proteger configuracionTema contra escalamiento de privilegios o borrado accidental
+    let configuracionTemaFinal: any = undefined;
+    if (data.configuracionTema !== undefined) {
+      const configActual = (org.configuracionTema as Record<string, any>) || {};
+      const configEntrante =
+        typeof data.configuracionTema === 'object' && data.configuracionTema !== null
+          ? data.configuracionTema
+          : {};
+
+      configuracionTemaFinal = {
+        ...configActual,
+        ...configEntrante,
+        // Proteger campos sensibles a menos que provenga explícitamente del SuperAdmin autorizador
+        geminiApiKey: esSuperAdmin
+          ? (configEntrante.geminiApiKey !== undefined
+              ? configEntrante.geminiApiKey
+              : configActual.geminiApiKey)
+          : configActual.geminiApiKey,
+        estadoOrganizacion: esSuperAdmin
+          ? (configEntrante.estadoOrganizacion || configActual.estadoOrganizacion || 'Activa')
+          : (configActual.estadoOrganizacion || 'Activa'),
+        motivoSuspension: esSuperAdmin
+          ? (configEntrante.motivoSuspension !== undefined
+              ? configEntrante.motivoSuspension
+              : configActual.motivoSuspension)
+          : configActual.motivoSuspension,
+        planActual: esSuperAdmin
+          ? (configEntrante.planActual || configActual.planActual || 'Básico')
+          : (configActual.planActual || 'Básico'),
+      };
+    }
+
+    const orgActualizada = await this.prisma.organizacion.update({
       where: { id: org.id },
       data: {
         ...(data.nombre && { nombre: data.nombre.trim() }),
@@ -480,9 +537,11 @@ export class OrganizacionesService {
         ...(data.colorSecundario !== undefined && { colorSecundario: data.colorSecundario?.trim() || null }),
         ...(data.fondoPersonalizado !== undefined && { fondoPersonalizado: data.fondoPersonalizado?.trim() || null }),
         ...(data.tipografia !== undefined && { tipografia: data.tipografia?.trim() || null }),
-        ...(data.configuracionTema !== undefined && { configuracionTema: data.configuracionTema }),
+        ...(configuracionTemaFinal !== undefined && { configuracionTema: configuracionTemaFinal }),
       },
     });
+
+    return this.enmascararOrganizacion(orgActualizada);
   }
 
   /**

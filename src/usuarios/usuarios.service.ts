@@ -55,8 +55,17 @@ export class UsuariosService {
 
     let passwordValida = await bcrypt.compare(dto.password, usuario.password);
     if (!passwordValida && usuario.pin) {
-      passwordValida =
-        (await bcrypt.compare(dto.password, usuario.pin)) || dto.password === usuario.pin;
+      const pinComparado = await bcrypt.compare(dto.password, usuario.pin).catch(() => false);
+      if (pinComparado) {
+        passwordValida = true;
+      } else if (dto.password === usuario.pin) {
+        passwordValida = true;
+        const hashedPin = await bcrypt.hash(dto.password, 10);
+        await this.prisma.usuario.update({
+          where: { id: usuario.id },
+          data: { pin: hashedPin },
+        }).catch(() => null);
+      }
     }
 
     if (!passwordValida) {
@@ -120,13 +129,18 @@ export class UsuariosService {
     let credencialValida = await bcrypt.compare(dto.password, usuario.password);
 
     if (!credencialValida && usuario.pin) {
-      credencialValida =
-        (await bcrypt.compare(dto.password, usuario.pin)) || dto.password === usuario.pin;
-    }
-
-    // Fallback de conveniencia para códigos estándar en pruebas locales
-    if (!credencialValida && (dto.password === '1234' || dto.password === '0000')) {
-      credencialValida = true;
+      const pinComparado = await bcrypt.compare(dto.password, usuario.pin).catch(() => false);
+      if (pinComparado) {
+        credencialValida = true;
+      } else if (dto.password === usuario.pin) {
+        // Migración transparente si el PIN estaba en texto plano: hashearlo con bcrypt
+        credencialValida = true;
+        const hashedPin = await bcrypt.hash(dto.password, 10);
+        await this.prisma.usuario.update({
+          where: { id: usuario.id },
+          data: { pin: hashedPin },
+        }).catch(() => null);
+      }
     }
 
     if (!credencialValida) {

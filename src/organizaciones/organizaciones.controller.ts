@@ -1,6 +1,7 @@
-import { Body, Controller, Get, Param, Patch, Post, Put } from '@nestjs/common';
+import { Body, Controller, Get, Headers, Param, Patch, Post, Put, UseGuards } from '@nestjs/common';
 import { OrganizacionesService } from './organizaciones.service.js';
 import { RegistroOrganizacionDto } from './dto/registro-organizacion.dto.js';
+import { SuperAdminGuard } from '../common/guards/superadmin.guard.js';
 
 @Controller('organizaciones')
 export class OrganizacionesController {
@@ -22,10 +23,15 @@ export class OrganizacionesController {
   }
 
   @Put(':id')
-  async update(@Param('id') id: string, @Body() body: any) {
-    return this.organizacionesService.update(id, body);
+  async update(
+    @Param('id') id: string,
+    @Body() body: any,
+    @Headers('x-admin-key') adminKey?: string,
+  ) {
+    return this.organizacionesService.update(id, body, adminKey);
   }
 
+  @UseGuards(SuperAdminGuard)
   @Patch(':id/gemini-key')
   async actualizarGeminiKey(
     @Param('id') id: string,
@@ -34,6 +40,7 @@ export class OrganizacionesController {
     return this.organizacionesService.actualizarGeminiKey(id, apiKey);
   }
 
+  @UseGuards(SuperAdminGuard)
   @Patch(':id/estado')
   async cambiarEstado(
     @Param('id') id: string,
@@ -43,6 +50,7 @@ export class OrganizacionesController {
     return this.organizacionesService.cambiarEstado(id, activa, motivo);
   }
 
+  @UseGuards(SuperAdminGuard)
   @Patch(':id/plan')
   async actualizarPlan(
     @Param('id') id: string,

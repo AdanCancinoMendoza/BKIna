@@ -22,10 +22,47 @@ async function bootstrap() {
     }),
   );
 
+  const allowedOriginsEnv = (process.env.ALLOWED_ORIGINS || '')
+    .split(',')
+    .map((o) => o.trim())
+    .filter(Boolean);
+
   app.enableCors({
-    origin: true,
+    origin: (
+      origin: string | undefined,
+      callback: (err: Error | null, allow?: boolean) => void,
+    ) => {
+      // Peticiones sin origen (Postman, curl, server-to-server, apps nativas)
+      if (!origin) {
+        return callback(null, true);
+      }
+
+      // Validar orígenes de desarrollo local, despliegues autorizados y lista blanca
+      if (
+        /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin) ||
+        origin.endsWith('.onrender.com') ||
+        origin.endsWith('.vercel.app') ||
+        allowedOriginsEnv.includes(origin)
+      ) {
+        return callback(null, true);
+      }
+
+      return callback(
+        new Error(
+          `Acceso bloqueado: Origen CORS no autorizado por la política institucional Inagerlis (${origin})`,
+        ),
+        false,
+      );
+    },
     credentials: true,
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+    allowedHeaders: [
+      'Content-Type',
+      'Authorization',
+      'x-admin-key',
+      'x-superadmin-key',
+      'x-no-compression',
+    ],
   });
 
   app.useGlobalPipes(

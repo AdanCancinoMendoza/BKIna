@@ -7,20 +7,24 @@ import {
   Post,
   Put,
   Query,
+  UseGuards,
 } from '@nestjs/common';
 import { UsuariosService } from './usuarios.service.js';
 import { LoginDto, LoginPerfilDto } from './dto/login.dto.js';
 import { CreateUsuarioDto, UpdateUsuarioDto } from './dto/create-usuario.dto.js';
+import { AuthRateLimitGuard } from '../common/guards/auth-rate-limit.guard.js';
 
 @Controller('usuarios')
 export class UsuariosController {
   constructor(private readonly usuariosService: UsuariosService) {}
 
+  @UseGuards(AuthRateLimitGuard)
   @Post('login')
   async login(@Body() dto: LoginDto) {
     return this.usuariosService.login(dto);
   }
 
+  @UseGuards(AuthRateLimitGuard)
   @Post('login-perfil')
   async loginPerfil(@Body() dto: LoginPerfilDto) {
     return this.usuariosService.loginPerfil(dto);
