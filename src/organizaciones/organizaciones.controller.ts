@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Put } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Put } from '@nestjs/common';
 import { OrganizacionesService } from './organizaciones.service.js';
 import { RegistroOrganizacionDto } from './dto/registro-organizacion.dto.js';
 
@@ -25,4 +25,37 @@ export class OrganizacionesController {
   async update(@Param('id') id: string, @Body() body: any) {
     return this.organizacionesService.update(id, body);
   }
+
+  @Patch(':id/gemini-key')
+  async actualizarGeminiKey(
+    @Param('id') id: string,
+    @Body('apiKey') apiKey: string,
+  ) {
+    return this.organizacionesService.actualizarGeminiKey(id, apiKey);
+  }
+
+  @Patch(':id/estado')
+  async cambiarEstado(
+    @Param('id') id: string,
+    @Body('activa') activa: boolean,
+    @Body('motivo') motivo?: string,
+  ) {
+    return this.organizacionesService.cambiarEstado(id, activa, motivo);
+  }
+
+  @Patch(':id/plan')
+  async actualizarPlan(
+    @Param('id') id: string,
+    @Body('plan') plan: string,
+    @Body('estado') estado?: string,
+    @Body('diasVigencia') diasVigencia?: number,
+  ) {
+    return this.organizacionesService.actualizarPlan(
+      id,
+      plan,
+      estado,
+      diasVigencia,
+    );
+  }
 }
+

@@ -20,6 +20,7 @@ import { KeepAliveModule } from './keep-alive/keep-alive.module.js';
 import { MantenimientoModule } from './mantenimiento/mantenimiento.module.js';
 import { CalendarioModule } from './calendario/calendario.module.js';
 import { ProveedoresModule } from './proveedores/proveedores.module.js';
+import { AiModule } from './ai/ai.module.js';
 
 @Module({
   imports: [
@@ -47,6 +48,7 @@ import { ProveedoresModule } from './proveedores/proveedores.module.js';
     MantenimientoModule,
     CalendarioModule,
     ProveedoresModule,
+    AiModule,
   ],
 })
 export class AppModule {}

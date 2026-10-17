@@ -484,4 +484,108 @@ export class OrganizacionesService {
       },
     });
   }
+
+  /**
+   * Asigna o actualiza la API Key de Gemini para una organización específica.
+   */
+  async actualizarGeminiKey(id: string, apiKey: string) {
+    const org = await this.prisma.organizacion.findUnique({ where: { id } });
+    if (!org) {
+      throw new NotFoundException('Organización no encontrada');
+    }
+
+    const configActual = (org.configuracionTema as Record<string, any>) || {};
+    const nuevaConfig = {
+      ...configActual,
+      geminiApiKey: apiKey ? apiKey.trim() : null,
+    };
+
+    return this.prisma.organizacion.update({
+      where: { id },
+      data: {
+        configuracionTema: nuevaConfig,
+      },
+      select: {
+        id: true,
+        nombre: true,
+        configuracionTema: true,
+      },
+    });
+  }
+
+  /**
+   * Suspende o activa una organización.
+   */
+  async cambiarEstado(id: string, activa: boolean, motivo?: string) {
+    const org = await this.prisma.organizacion.findUnique({ where: { id } });
+    if (!org) {
+      throw new NotFoundException('Organización no encontrada');
+    }
+
+    const configActual = (org.configuracionTema as Record<string, any>) || {};
+    const nuevaConfig = {
+      ...configActual,
+      estadoOrganizacion: activa ? 'Activa' : 'Suspendida',
+      motivoSuspension: activa ? null : motivo || 'Suspendida por el Administrador General',
+      fechaCambioEstado: new Date().toISOString(),
+    };
+
+    return this.prisma.organizacion.update({
+      where: { id },
+      data: {
+        configuracionTema: nuevaConfig,
+      },
+      select: {
+        id: true,
+        nombre: true,
+        configuracionTema: true,
+      },
+    });
+  }
+
+  /**
+   * Actualiza el plan y membresía de una organización creando o renovando su suscripción.
+   */
+  async actualizarPlan(
+    id: string,
+    plan: string,
+    estado: string = 'Activa',
+    diasVigencia: number = 30,
+  ) {
+    const org = await this.prisma.organizacion.findUnique({ where: { id } });
+    if (!org) {
+      throw new NotFoundException('Organización no encontrada');
+    }
+
+    const fechaInicio = new Date();
+    const fechaFin = new Date();
+    fechaFin.setDate(fechaFin.getDate() + diasVigencia);
+
+    // Crear o registrar suscripción
+    const suscripcion = await this.prisma.suscripcion.create({
+      data: {
+        organizacionId: id,
+        plan: plan || 'Pro',
+        estado: estado || 'Activa',
+        fechaInicio,
+        fechaFin,
+      },
+    });
+
+    // Actualizar también en el config rápido de la organización
+    const configActual = (org.configuracionTema as Record<string, any>) || {};
+    await this.prisma.organizacion.update({
+      where: { id },
+      data: {
+        configuracionTema: {
+          ...configActual,
+          planActual: plan,
+          estadoSuscripcion: estado,
+          vigenciaSuscripcion: fechaFin.toISOString(),
+        },
+      },
+    });
+
+    return suscripcion;
+  }
 }
