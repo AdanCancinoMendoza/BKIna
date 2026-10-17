@@ -1,6 +1,8 @@
-import { Controller, Get, Post, Body, Param } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, UseGuards } from '@nestjs/common';
 import { WhatsappService } from './whatsapp.service.js';
+import { AuthRateLimitGuard } from '../common/guards/auth-rate-limit.guard.js';
 
+@UseGuards(AuthRateLimitGuard)
 @Controller('whatsapp')
 export class WhatsappController {
   constructor(private readonly whatsappService: WhatsappService) {}

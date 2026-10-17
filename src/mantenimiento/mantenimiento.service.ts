@@ -3,9 +3,11 @@ import {
   UnauthorizedException,
   BadRequestException,
 } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { EventsGateway } from '../events/events.gateway.js';
 import { MantenimientoAuthDto } from './mantenimiento.dto.js';
+import { SecurityTelemetryService } from '../common/services/security-telemetry.service.js';
 import bcrypt from 'bcryptjs';
 
 @Injectable()
@@ -45,9 +47,7 @@ export class MantenimientoService {
       ) {
         let esValida = await bcrypt.compare(trimmed, usuario.password);
         if (!esValida && usuario.pin) {
-          esValida =
-            (await bcrypt.compare(trimmed, usuario.pin)) ||
-            trimmed === usuario.pin;
+          esValida = await bcrypt.compare(trimmed, usuario.pin).catch(() => false);
         }
         if (esValida) return true;
       }
@@ -68,8 +68,7 @@ export class MantenimientoService {
     for (const admin of admins) {
       let esValida = await bcrypt.compare(trimmed, admin.password);
       if (!esValida && admin.pin) {
-        esValida =
-          (await bcrypt.compare(trimmed, admin.pin)) || trimmed === admin.pin;
+        esValida = await bcrypt.compare(trimmed, admin.pin).catch(() => false);
       }
       if (esValida) return true;
     }
@@ -81,11 +80,22 @@ export class MantenimientoService {
     for (const u of todosUsuarios) {
       let esValida = await bcrypt.compare(trimmed, u.password);
       if (!esValida && u.pin) {
-        esValida =
-          (await bcrypt.compare(trimmed, u.pin)) || trimmed === u.pin;
+        esValida = await bcrypt.compare(trimmed, u.pin).catch(() => false);
       }
       if (esValida) return true;
     }
+
+    SecurityTelemetryService.registrarIncidente({
+      id: randomUUID(),
+      ip: 'anónimo',
+      tipo: 'INTENTO_DESTRUCCION',
+      ruta: '/inagerlis/mantenimiento',
+      detalles: `Intento de borrado/destrucción con clave no autorizada para organización [${organizacionId}]`,
+      timestamp: new Date().toISOString(),
+      intentos: 1,
+      bloqueada: false,
+      nivelRiesgo: 'CRITICO',
+    });
 
     throw new UnauthorizedException(
       'Clave de administrador incorrecta. Operación no autorizada.',

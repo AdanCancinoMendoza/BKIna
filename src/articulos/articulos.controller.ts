@@ -7,9 +7,12 @@ import {
   Post,
   Put,
   Query,
+  UseGuards,
 } from '@nestjs/common';
 import { ArticulosService } from './articulos.service.js';
 import { CreateArticuloDto, UpdateArticuloDto } from './dto/create-articulo.dto.js';
+import { SuperAdminGuard } from '../common/guards/superadmin.guard.js';
+import { AuthRateLimitGuard } from '../common/guards/auth-rate-limit.guard.js';
 
 @Controller('articulos')
 export class ArticulosController {
@@ -226,18 +229,26 @@ export class ArticulosController {
   }
 
   @Put(':id')
-  async update(@Param('id') id: string, @Body() dto: any) {
-    return this.articulosService.update(id, dto);
+  async update(
+    @Param('id') id: string,
+    @Body() dto: any,
+    @Query('organizacionId') organizacionId?: string,
+  ) {
+    return this.articulosService.update(id, dto, organizacionId || dto.organizacionId);
   }
 
   @Delete('organizacion/:organizacionId/todos')
+  @UseGuards(SuperAdminGuard, AuthRateLimitGuard)
   async deleteAllByOrganizacion(@Param('organizacionId') organizacionId: string) {
     return this.articulosService.deleteAllByOrganizacion(organizacionId);
   }
 
   @Delete(':id')
-  async delete(@Param('id') id: string) {
-    return this.articulosService.delete(id);
+  async delete(
+    @Param('id') id: string,
+    @Query('organizacionId') organizacionId?: string,
+  ) {
+    return this.articulosService.delete(id, organizacionId);
   }
 }
 

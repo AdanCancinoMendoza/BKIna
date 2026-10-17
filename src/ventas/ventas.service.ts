@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { EventsGateway } from '../events/events.gateway.js';
 
@@ -78,14 +78,35 @@ export class VentasService {
         }
       }
 
+      if (!data.detalles || !Array.isArray(data.detalles) || data.detalles.length === 0) {
+        throw new BadRequestException('El ticket debe contener al menos un artículo');
+      }
+      if (data.detalles.length > 200) {
+        throw new BadRequestException('El ticket no puede contener más de 200 conceptos');
+      }
+
       // Asegurar que los artículos existan y verificar disponibilidad de existencias
       const processedDetalles: Array<{ articuloId: string; cantidad: number; precioUnitario: number; subtotal: number }> = [];
       for (const d of data.detalles) {
-        let artId = String(d.articuloId);
+        const cant = Number(d.cantidad);
+        const precio = Number(d.precioUnitario);
+        if (isNaN(cant) || cant <= 0) {
+          throw new BadRequestException(`Cantidad inválida (${d.cantidad}) en concepto`);
+        }
+        if (isNaN(precio) || precio < 0) {
+          throw new BadRequestException(`Precio unitario inválido (${d.precioUnitario}) en concepto`);
+        }
+
+        let artId = String(d.articuloId || '').trim();
         let art = await tx.articulo.findUnique({
           where: { id: artId },
           include: { inventarios: { where: { sucursalId: resolvedSucursalId } } },
         });
+
+        // Asegurar que si se localiza el artículo por ID, pertenezca a la organización actual
+        if (art && art.organizacionId !== data.organizacionId) {
+          art = null;
+        }
 
         if (!art) {
           art = await tx.articulo.findFirst({
@@ -95,12 +116,14 @@ export class VentasService {
           if (art) {
             artId = art.id;
           } else {
+            const nombreArt = (d as any).nombre || `Artículo ${artId}`;
+            const esVentaRapida = (d as any).esVentaRapida || artId.startsWith('VR-') || artId.startsWith('OFF-') || artId.startsWith('TEMP-');
             const nuevoArt = await tx.articulo.create({
               data: {
                 organizacionId: data.organizacionId,
-                codigo: `ART-${Date.now().toString().slice(-6)}`,
-                nombre: (d as any).nombre || `Artículo ${artId}`,
-                precioVenta: d.precioUnitario,
+                codigo: esVentaRapida ? `VR-${Date.now().toString().slice(-6)}` : `ART-${Date.now().toString().slice(-6)}`,
+                nombre: nombreArt,
+                precioVenta: precio,
                 precioCompra: 0,
                 unidad: 'Pieza',
                 stockIlimitado: true, // Venta rápida por defecto
@@ -120,18 +143,19 @@ export class VentasService {
               `El producto "${art.nombre}" está agotado (0 existencias). No es posible venderlo.`
             );
           }
-          if (stockActual < Number(d.cantidad)) {
+          if (stockActual < cant) {
             throw new BadRequestException(
-              `Existencias insuficientes para "${art.nombre}". Stock disponible: ${stockActual}, solicitado: ${d.cantidad}.`
+              `Existencias insuficientes para "${art.nombre}". Stock disponible: ${stockActual}, solicitado: ${cant}.`
             );
           }
         }
 
+        const subtotalCalc = Math.round(cant * precio * 100) / 100;
         processedDetalles.push({
           articuloId: artId,
-          cantidad: Number(d.cantidad),
-          precioUnitario: Number(d.precioUnitario),
-          subtotal: Number(d.subtotal),
+          cantidad: cant,
+          precioUnitario: precio,
+          subtotal: Number(d.subtotal) >= 0 ? Number(d.subtotal) : subtotalCalc,
         });
       }
 
@@ -167,20 +191,30 @@ export class VentasService {
         },
       });
 
-      // Si la venta está vinculada a un cliente, acumular puntos de fidelidad
+      // Si la venta está vinculada a un cliente, acumular puntos de fidelidad con validación estricta
       if (data.clienteId) {
-        const puntosGanados = Math.floor(Number(data.total) / 10); // 1 punto por cada $10
-        const puntosAjuste = puntosGanados - (data.puntosCanjeados || 0);
+        const clienteActual = await tx.cliente.findUnique({
+          where: { id: data.clienteId },
+          select: { id: true, puntos: true, organizacionId: true },
+        });
 
-        if (puntosAjuste !== 0) {
-          await tx.cliente.update({
-            where: { id: data.clienteId },
-            data: {
-              puntos: {
-                increment: puntosAjuste,
+        if (clienteActual && clienteActual.organizacionId === data.organizacionId) {
+          const puntosSolicitados = Math.max(0, Math.floor(Number(data.puntosCanjeados) || 0));
+          // No permitir canjear más puntos de los que realmente posee el cliente
+          const puntosEfectivosACanjear = Math.min(clienteActual.puntos || 0, puntosSolicitados);
+          const puntosGanados = Math.max(0, Math.floor(Number(data.total) / 10)); // 1 punto por cada $10 gastados
+          const puntosAjuste = puntosGanados - puntosEfectivosACanjear;
+
+          if (puntosAjuste !== 0) {
+            await tx.cliente.update({
+              where: { id: data.clienteId },
+              data: {
+                puntos: {
+                  increment: puntosAjuste,
+                },
               },
-            },
-          });
+            });
+          }
         }
       }
 
@@ -245,14 +279,14 @@ export class VentasService {
     limit = 200,
     filters?: { desde?: string; hasta?: string; sucursalId?: string },
   ) {
-    let org = null;
-    if (organizacionId && organizacionId !== 'default') {
-      org = await this.prisma.organizacion.findUnique({ where: { id: organizacionId } });
+    if (!organizacionId || organizacionId === 'default') {
+      return [];
     }
+    const org = await this.prisma.organizacion.findUnique({ where: { id: organizacionId } });
     if (!org) {
-      org = await this.prisma.organizacion.findFirst();
+      return [];
     }
-    const resolvedOrgId = org?.id || organizacionId;
+    const resolvedOrgId = org.id;
 
     const where: any = { organizacionId: resolvedOrgId };
 
@@ -331,14 +365,14 @@ export class VentasService {
   }
 
   async obtenerResumenVentas(organizacionId: string) {
-    let org = null;
-    if (organizacionId && organizacionId !== 'default') {
-      org = await this.prisma.organizacion.findUnique({ where: { id: organizacionId } });
+    if (!organizacionId || organizacionId === 'default') {
+      return null;
     }
+    const org = await this.prisma.organizacion.findUnique({ where: { id: organizacionId } });
     if (!org) {
-      org = await this.prisma.organizacion.findFirst();
+      return null;
     }
-    const resolvedOrgId = org?.id || organizacionId;
+    const resolvedOrgId = org.id;
 
     // 1. Revisar caché en memoria (TTL de 15 segundos para absorber ráfagas concurrentes)
     const now = Date.now();
@@ -480,14 +514,14 @@ export class VentasService {
   }
 
   async crearCampana(data: { organizacionId: string; nombre: string; canal?: string; mensaje: string; estado?: string }) {
-    let org = null;
-    if (data.organizacionId && data.organizacionId !== 'default') {
-      org = await this.prisma.organizacion.findUnique({ where: { id: data.organizacionId } });
+    if (!data.organizacionId || data.organizacionId === 'default') {
+      throw new BadRequestException('El ID de organización es requerido');
     }
+    const org = await this.prisma.organizacion.findUnique({ where: { id: data.organizacionId } });
     if (!org) {
-      org = await this.prisma.organizacion.findFirst();
+      throw new NotFoundException('Organización no encontrada');
     }
-    const resolvedOrgId = org?.id || data.organizacionId;
+    const resolvedOrgId = org.id;
 
     return this.prisma.campana.create({
       data: {
@@ -501,14 +535,14 @@ export class VentasService {
   }
 
   async obtenerCampanas(organizacionId: string) {
-    let org = null;
-    if (organizacionId && organizacionId !== 'default') {
-      org = await this.prisma.organizacion.findUnique({ where: { id: organizacionId } });
+    if (!organizacionId || organizacionId === 'default') {
+      return [];
     }
+    const org = await this.prisma.organizacion.findUnique({ where: { id: organizacionId } });
     if (!org) {
-      org = await this.prisma.organizacion.findFirst();
+      return [];
     }
-    const resolvedOrgId = org?.id || organizacionId;
+    const resolvedOrgId = org.id;
 
     return this.prisma.campana.findMany({
       where: { organizacionId: resolvedOrgId },
@@ -523,14 +557,14 @@ export class VentasService {
     mensaje: string;
     nombreCampana?: string;
   }) {
-    let org = null;
-    if (data.organizacionId && data.organizacionId !== 'default') {
-      org = await this.prisma.organizacion.findUnique({ where: { id: data.organizacionId } });
+    if (!data.organizacionId || data.organizacionId === 'default') {
+      throw new BadRequestException('El ID de organización es requerido');
     }
+    const org = await this.prisma.organizacion.findUnique({ where: { id: data.organizacionId } });
     if (!org) {
-      org = await this.prisma.organizacion.findFirst();
+      throw new NotFoundException('Organización no encontrada');
     }
-    const resolvedOrgId = org?.id || data.organizacionId;
+    const resolvedOrgId = org.id;
 
     const whereClause: any = {
       organizacionId: resolvedOrgId,

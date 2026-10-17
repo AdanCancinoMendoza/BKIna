@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { EventsGateway } from '../events/events.gateway.js';
 
@@ -10,11 +10,14 @@ export class ClientesService {
   ) {}
 
   async findAll(organizacionId?: string, search?: string, localidad?: string) {
-    const where: any = {};
-
-    if (organizacionId) {
-      where.organizacionId = organizacionId;
+    // Por seguridad multi-inquilino estricta, rechazar consultas sin organizacionId
+    if (!organizacionId) {
+      return [];
     }
+
+    const where: any = {
+      organizacionId,
+    };
 
     if (localidad && localidad !== 'Todas las localidades') {
       where.localidad = { contains: localidad, mode: 'insensitive' };
@@ -68,7 +71,7 @@ export class ClientesService {
     });
   }
 
-  async findOne(id: string) {
+  async findOne(id: string, organizacionId?: string) {
     const cliente = await this.prisma.cliente.findUnique({
       where: { id },
       include: {
@@ -103,6 +106,9 @@ export class ClientesService {
     });
 
     if (!cliente) throw new NotFoundException('Cliente no encontrado');
+    if (organizacionId && cliente.organizacionId !== organizacionId) {
+      throw new ForbiddenException('No tiene permisos para consultar información de este cliente');
+    }
 
     const totalGastado = cliente.ventas.reduce((acc, v) => acc + Number(v.total || 0), 0);
     const comprasCount = cliente.ventas.length;
@@ -192,7 +198,16 @@ export class ClientesService {
       saldo?: number;
       descuento?: number;
     },
+    organizacionId?: string,
   ) {
+    const existing = await this.prisma.cliente.findUnique({ where: { id } });
+    if (!existing) {
+      throw new NotFoundException('Cliente no encontrado');
+    }
+    if (organizacionId && existing.organizacionId !== organizacionId) {
+      throw new ForbiddenException('No tiene permisos para modificar este cliente de otra organización');
+    }
+
     const updateData: any = {};
     if (data.nombre !== undefined) updateData.nombre = data.nombre.trim();
     if (data.telefono !== undefined) updateData.telefono = data.telefono?.trim() || null;
@@ -212,10 +227,13 @@ export class ClientesService {
     return cliente;
   }
 
-  async remove(id: string) {
+  async remove(id: string, organizacionId?: string) {
     const cliente = await this.prisma.cliente.findUnique({ where: { id } });
     if (!cliente) {
       throw new NotFoundException('Cliente no encontrado');
+    }
+    if (organizacionId && cliente.organizacionId !== organizacionId) {
+      throw new ForbiddenException('No tiene permisos para eliminar este cliente de otra organización');
     }
 
     await this.prisma.cliente.delete({ where: { id } });

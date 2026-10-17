@@ -1,5 +1,7 @@
-import { Controller, Get, Post, Put, Body, Param } from '@nestjs/common';
+import { Controller, Get, Post, Put, Body, Param, UseGuards } from '@nestjs/common';
 import { SuscripcionesService } from './suscripciones.service.js';
+import { SuperAdminGuard } from '../common/guards/superadmin.guard.js';
+import { AuthRateLimitGuard } from '../common/guards/auth-rate-limit.guard.js';
 
 @Controller('suscripciones')
 export class SuscripcionesController {
@@ -16,6 +18,7 @@ export class SuscripcionesController {
   }
 
   @Put('organizacion/:organizacionId')
+  @UseGuards(SuperAdminGuard, AuthRateLimitGuard)
   async actualizarSuscripcion(
     @Param('organizacionId') organizacionId: string,
     @Body() body: any,
@@ -24,6 +27,7 @@ export class SuscripcionesController {
   }
 
   @Post('cambiar-plan')
+  @UseGuards(AuthRateLimitGuard)
   async cambiarPlan(
     @Body('organizacionId') organizacionId: string,
     @Body('plan') plan: string,

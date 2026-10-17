@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 
 @Injectable()
@@ -9,14 +9,11 @@ export class SuscripcionesService {
    * Obtiene la suscripción actual de una organización, creando una por defecto si no existe
    */
   async obtenerSuscripcion(organizacionId: string) {
-    let org = null;
-    if (organizacionId && organizacionId !== 'default') {
-      org = await this.prisma.organizacion.findUnique({ where: { id: organizacionId } });
-    }
-    if (!org) {
-      org = await this.prisma.organizacion.findFirst();
+    if (!organizacionId || organizacionId === 'default') {
+      throw new BadRequestException('El ID de organización es requerido');
     }
 
+    const org = await this.prisma.organizacion.findUnique({ where: { id: organizacionId } });
     if (!org) {
       throw new NotFoundException('Organización no encontrada');
     }
@@ -82,6 +79,19 @@ export class SuscripcionesService {
     plan: string,
     periodo: 'mensual' | 'anual' = 'mensual',
   ) {
+    const planesPermitidos: Record<string, string> = {
+      basico: 'Básico',
+      básico: 'Básico',
+      pro: 'Pro',
+      enterprise: 'Enterprise',
+      empresarial: 'Enterprise',
+    };
+    const planKey = (plan || '').trim().toLowerCase();
+    const planValido = planesPermitidos[planKey];
+    if (!planValido) {
+      throw new BadRequestException(`El plan "${plan}" no es válido. Opciones: Básico, Pro, Enterprise.`);
+    }
+
     const suscripcion = await this.obtenerSuscripcion(organizacionId);
     const ahora = new Date();
     const nuevaFechaFin = new Date();
@@ -95,7 +105,7 @@ export class SuscripcionesService {
     return this.prisma.suscripcion.update({
       where: { id: suscripcion.id },
       data: {
-        plan,
+        plan: planValido,
         estado: 'Activa',
         fechaInicio: ahora,
         fechaFin: nuevaFechaFin,

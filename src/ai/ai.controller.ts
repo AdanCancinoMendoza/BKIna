@@ -4,9 +4,12 @@ import {
   Get,
   Param,
   Post,
+  UseGuards,
 } from '@nestjs/common';
 import { AiService, ChatMessage } from './ai.service.js';
+import { AuthRateLimitGuard } from '../common/guards/auth-rate-limit.guard.js';
 
+@UseGuards(AuthRateLimitGuard)
 @Controller('ai')
 export class AiController {
   constructor(private readonly aiService: AiService) {}

@@ -2,6 +2,7 @@ import { Body, Controller, Get, Headers, Param, Patch, Post, Put, UseGuards } fr
 import { OrganizacionesService } from './organizaciones.service.js';
 import { RegistroOrganizacionDto } from './dto/registro-organizacion.dto.js';
 import { SuperAdminGuard } from '../common/guards/superadmin.guard.js';
+import { SecurityTelemetryService } from '../common/services/security-telemetry.service.js';
 
 @Controller('organizaciones')
 export class OrganizacionesController {
@@ -15,6 +16,30 @@ export class OrganizacionesController {
   @Get()
   async findAll() {
     return this.organizacionesService.findAll();
+  }
+
+  @UseGuards(SuperAdminGuard)
+  @Get('analitica/plan')
+  async obtenerPlanAnalitico() {
+    return this.organizacionesService.obtenerPlanAnalitico();
+  }
+
+  @UseGuards(SuperAdminGuard)
+  @Get('seguridad/telemetria')
+  async obtenerTelemetriaSeguridad() {
+    return SecurityTelemetryService.obtenerTelemetria();
+  }
+
+  @UseGuards(SuperAdminGuard)
+  @Post('seguridad/desbloquear-ip')
+  async desbloquearIp(@Body('ip') ip: string) {
+    const ok = SecurityTelemetryService.desbloquearIp(ip);
+    return {
+      ok,
+      mensaje: ok
+        ? `IP [${ip}] desbloqueada exitosamente del Escudo Inagerlis.`
+        : `IP [${ip}] no encontrada en la lista de bloqueo.`,
+    };
   }
 
   @Get(':id')

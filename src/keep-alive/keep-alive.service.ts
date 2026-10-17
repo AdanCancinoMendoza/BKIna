@@ -13,29 +13,47 @@ export class KeepAliveService implements OnModuleInit, OnModuleDestroy {
   private startupTimer?: NodeJS.Timeout;
 
   private readonly enabled: boolean;
-  private readonly targetUrl: string;
+  private readonly targetUrls: string[];
   private readonly intervalMinutes: number;
   private readonly startHour: number;
   private readonly endHour: number;
   private readonly timeZone: string;
+  private readonly alwaysActive24_7: boolean;
 
   constructor(private readonly configService: ConfigService) {
     this.enabled =
       this.configService.get<string>('KEEP_ALIVE_ENABLED', 'true') !== 'false';
 
-    const defaultUrl =
-      process.env.RENDER_EXTERNAL_URL
-        ? `${process.env.RENDER_EXTERNAL_URL}/inagerlis/ping`
-        : 'https://bkina.onrender.com/inagerlis/ping';
+    const defaultBackendUrl = process.env.RENDER_EXTERNAL_URL
+      ? `${process.env.RENDER_EXTERNAL_URL}/inagerlis/ping`
+      : 'https://bkina.onrender.com/inagerlis/ping';
 
-    this.targetUrl = this.configService.get<string>(
-      'KEEP_ALIVE_URL',
-      defaultUrl,
-    );
+    const defaultFrontendUrl =
+      process.env.FRONTEND_URL || 'https://inagerlis-pv-crm.onrender.com';
 
+    // Lista de URLs configuradas (soporta múltiples separadas por coma)
+    const rawUrls = this.configService.get<string>('KEEP_ALIVE_URLS');
+    if (rawUrls) {
+      this.targetUrls = rawUrls
+        .split(',')
+        .map((u) => u.trim())
+        .filter(Boolean);
+    } else {
+      const single = this.configService.get<string>('KEEP_ALIVE_URL');
+      if (single) {
+        this.targetUrls = Array.from(new Set([single, defaultFrontendUrl]));
+      } else {
+        this.targetUrls = [defaultBackendUrl, defaultFrontendUrl];
+      }
+    }
+
+    // Intervalo de 12 minutos (Render suspende a los 15 minutos exactos de inactividad)
     this.intervalMinutes = Number(
-      this.configService.get<string>('KEEP_ALIVE_INTERVAL_MINUTES', '14'),
+      this.configService.get<string>('KEEP_ALIVE_INTERVAL_MINUTES', '12'),
     );
+
+    this.alwaysActive24_7 =
+      this.configService.get<string>('KEEP_ALIVE_24_7', 'true') === 'true';
 
     this.startHour = Number(
       this.configService.get<string>('KEEP_ALIVE_START_HOUR', '6'),
@@ -58,18 +76,18 @@ export class KeepAliveService implements OnModuleInit, OnModuleDestroy {
     }
 
     this.logger.log(
-      `Keep-alive service inicializado. Destino: ${this.targetUrl} | Intervalo: ${this.intervalMinutes}m | Horario: ${this.startHour}:00 - ${this.endHour}:00 (${this.timeZone})`,
+      `Keep-alive multi-servicio inicializado. Destinos: [${this.targetUrls.join(', ')}] | Intervalo: ${this.intervalMinutes}m | Horario: ${this.alwaysActive24_7 ? '24/7 Continuo' : `${this.startHour}:00 - ${this.endHour}:00 (${this.timeZone})`}`,
     );
 
-    // Esperar 15 segundos después de que levante el servidor antes del primer ping
+    // Primer ping 15 segundos después de que inicie el servidor
     this.startupTimer = setTimeout(() => {
-      void this.pingServer('startup');
+      void this.pingAllServers('startup');
     }, 15000);
 
-    // Ejecutar cada X minutos (14m por defecto para evitar los 15m de inactividad de Render)
+    // Pings periódicos cada 12 minutos para evitar que Render suspenda backend o frontend
     const intervalMs = this.intervalMinutes * 60 * 1000;
     this.intervalTimer = setInterval(() => {
-      void this.pingServer('scheduled');
+      void this.pingAllServers('scheduled');
     }, intervalMs);
   }
 
@@ -107,12 +125,12 @@ export class KeepAliveService implements OnModuleInit, OnModuleDestroy {
   }
 
   private isWithinActiveHours(): boolean {
+    if (this.alwaysActive24_7) return true;
     const { hour } = this.getCurrentTimeInfo();
-    // startHour = 6 (06:00), endHour = 24 (23:59:59 inclusive, 00:00 es hora 0)
     return hour >= this.startHour && hour < this.endHour;
   }
 
-  async pingServer(reason: 'startup' | 'scheduled'): Promise<void> {
+  async pingAllServers(reason: 'startup' | 'scheduled'): Promise<void> {
     const { hour, minute } = this.getCurrentTimeInfo();
     const formattedTime = `${hour.toString().padStart(2, '0')}:${minute
       .toString()
@@ -120,20 +138,30 @@ export class KeepAliveService implements OnModuleInit, OnModuleDestroy {
 
     if (!this.isWithinActiveHours()) {
       this.logger.debug(
-        `[Keep-alive] Fuera de horario activo (${formattedTime} en ${this.timeZone}). Horario configurado: ${this.startHour}:00 a ${this.endHour}:00. Ping omitido.`,
+        `[Keep-alive] Fuera de horario activo (${formattedTime} en ${this.timeZone}). Horario configurado: ${this.startHour}:00 a ${this.endHour}:00. Pings omitidos.`,
       );
       return;
     }
 
+    await Promise.allSettled(
+      this.targetUrls.map((url) => this.pingSingleUrl(url, reason, formattedTime)),
+    );
+  }
+
+  private async pingSingleUrl(
+    url: string,
+    reason: 'startup' | 'scheduled',
+    formattedTime: string,
+  ): Promise<void> {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 20000);
+      const timeoutId = setTimeout(() => controller.abort(), 25000);
 
-      const res = await fetch(this.targetUrl, {
+      const res = await fetch(url, {
         method: 'GET',
         signal: controller.signal,
         headers: {
-          'User-Agent': 'BKIna-KeepAlive/1.0',
+          'User-Agent': 'Inagerlis-KeepAlive/2.0',
         },
       });
 
@@ -141,16 +169,16 @@ export class KeepAliveService implements OnModuleInit, OnModuleDestroy {
 
       if (res.ok) {
         this.logger.log(
-          `[Keep-alive] (${reason} @ ${formattedTime}) Ping exitoso a ${this.targetUrl} - HTTP ${res.status}`,
+          `[Keep-alive] (${reason} @ ${formattedTime}) Ping exitoso a ${url} - HTTP ${res.status}`,
         );
       } else {
         this.logger.warn(
-          `[Keep-alive] (${reason} @ ${formattedTime}) Ping respondió con código HTTP ${res.status}`,
+          `[Keep-alive] (${reason} @ ${formattedTime}) Ping a ${url} respondió con código HTTP ${res.status}`,
         );
       }
     } catch (err: any) {
       this.logger.warn(
-        `[Keep-alive] (${reason} @ ${formattedTime}) Error al conectar con ${this.targetUrl}: ${err?.message}`,
+        `[Keep-alive] (${reason} @ ${formattedTime}) Error al conectar con ${url}: ${err?.message}`,
       );
     }
   }

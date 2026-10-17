@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { EventsGateway } from '../events/events.gateway.js';
 
@@ -191,10 +191,10 @@ export class CajaService {
     notas?: string;
     fecha?: string | Date;
   }) {
-    let org = await this.prisma.organizacion.findUnique({ where: { id: data.organizacionId } });
-    if (!org) {
-      org = await this.prisma.organizacion.findFirst();
+    if (!data.organizacionId || data.organizacionId === 'default') {
+      throw new BadRequestException('El ID de organización es requerido');
     }
+    const org = await this.prisma.organizacion.findUnique({ where: { id: data.organizacionId } });
     if (!org) throw new NotFoundException('Organización no encontrada');
 
     const corte = await this.prisma.corteCaja.create({
@@ -231,10 +231,8 @@ export class CajaService {
    * Obtiene los cortes de caja de una organización
    */
   async obtenerCortes(organizacionId: string, limit = 50) {
-    let org = await this.prisma.organizacion.findUnique({ where: { id: organizacionId } });
-    if (!org) {
-      org = await this.prisma.organizacion.findFirst();
-    }
+    if (!organizacionId || organizacionId === 'default') return [];
+    const org = await this.prisma.organizacion.findUnique({ where: { id: organizacionId } });
     if (!org) return [];
 
     return this.prisma.corteCaja.findMany({
@@ -248,10 +246,8 @@ export class CajaService {
    * Resumen integrado de ventas del día por horas y cortes de caja realizados
    */
   async obtenerResumenCortesYVentasDia(organizacionId: string, fechaStr?: string) {
-    let org = await this.prisma.organizacion.findUnique({ where: { id: organizacionId } });
-    if (!org) {
-      org = await this.prisma.organizacion.findFirst();
-    }
+    if (!organizacionId || organizacionId === 'default') return null;
+    const org = await this.prisma.organizacion.findUnique({ where: { id: organizacionId } });
     if (!org) return null;
 
     // Determinar rango de hoy

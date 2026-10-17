@@ -9,6 +9,7 @@ import bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { RegistroOrganizacionDto } from './dto/registro-organizacion.dto.js';
 import { getCatalogoSemilla } from './data/catalogos-semilla.js';
+import { SessionAnalyticsService } from '../common/services/session-analytics.service.js';
 
 @Injectable()
 export class OrganizacionesService {
@@ -646,5 +647,30 @@ export class OrganizacionesService {
     });
 
     return suscripcion;
+  }
+
+  /**
+   * Consolida métricas de uso, antigüedad, contactos y sesiones para el Plan Analítico del Admin Panel
+   */
+  async obtenerPlanAnalitico() {
+    const orgs = await this.prisma.organizacion.findMany({
+      include: {
+        _count: {
+          select: {
+            sucursales: true,
+            usuarios: true,
+            clientes: true,
+            ventas: true,
+          },
+        },
+        suscripciones: {
+          take: 1,
+          orderBy: { createdAt: 'desc' },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return SessionAnalyticsService.generarPlanAnalitico(orgs);
   }
 }

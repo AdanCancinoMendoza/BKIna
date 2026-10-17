@@ -14,6 +14,8 @@ import { LoginDto, LoginPerfilDto } from './dto/login.dto.js';
 import { CreateUsuarioDto, UpdateUsuarioDto } from './dto/create-usuario.dto.js';
 import { AuthRateLimitGuard } from '../common/guards/auth-rate-limit.guard.js';
 
+import { SessionAnalyticsService } from '../common/services/session-analytics.service.js';
+
 @Controller('usuarios')
 export class UsuariosController {
   constructor(private readonly usuariosService: UsuariosService) {}
@@ -28,6 +30,17 @@ export class UsuariosController {
   @Post('login-perfil')
   async loginPerfil(@Body() dto: LoginPerfilDto) {
     return this.usuariosService.loginPerfil(dto);
+  }
+
+  @Post('logout')
+  async logout(@Body() dto: { usuarioId?: string; organizacionId?: string }) {
+    if (dto.usuarioId && dto.organizacionId) {
+      SessionAnalyticsService.registrarLogout({
+        usuarioId: dto.usuarioId,
+        organizacionId: dto.organizacionId,
+      });
+    }
+    return { ok: true, mensaje: 'Sesión finalizada correctamente' };
   }
 
   @Get()

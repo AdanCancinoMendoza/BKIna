@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -31,26 +32,12 @@ export class ArticulosService {
       });
     }
 
-    const where: any = {};
-    if (familiaId) where.familiaId = familiaId;
-    if (search) {
-      const q = search.trim();
-      where.OR = [
-        { nombre: { contains: q, mode: 'insensitive' } },
-        { codigo: { contains: q, mode: 'insensitive' } },
-        { descripcion: { contains: q, mode: 'insensitive' } },
-      ];
+    if (sucursalId) {
+      return this.findBySucursal(sucursalId, search);
     }
 
-    return this.prisma.articulo.findMany({
-      where,
-      include: {
-        familia: true,
-        subfamilia: true,
-        inventarios: true,
-      },
-      orderBy: { nombre: 'asc' },
-    });
+    // Por seguridad multi-inquilino, nunca retornar artículos sin pertenencia a organización o sucursal
+    return [];
   }
 
   async findByOrganizacion(
@@ -317,13 +304,17 @@ export class ArticulosService {
     };
   }
 
-  async update(id: string, dto: UpdateArticuloDto) {
+  async update(id: string, dto: UpdateArticuloDto, organizacionId?: string) {
     const articulo = await this.prisma.articulo.findUnique({
       where: { id },
     });
 
     if (!articulo) {
       throw new NotFoundException('Artículo no encontrado');
+    }
+
+    if (organizacionId && articulo.organizacionId !== organizacionId) {
+      throw new ForbiddenException('No tiene permisos para modificar este artículo de otra organización');
     }
 
     const data: any = {};
@@ -388,13 +379,17 @@ export class ArticulosService {
     return resultado;
   }
 
-  async delete(id: string) {
+  async delete(id: string, organizacionId?: string) {
     const articulo = await this.prisma.articulo.findUnique({
       where: { id },
     });
 
     if (!articulo) {
       throw new NotFoundException('Artículo no encontrado');
+    }
+
+    if (organizacionId && articulo.organizacionId !== organizacionId) {
+      throw new ForbiddenException('No tiene permisos para eliminar este artículo de otra organización');
     }
 
     await this.prisma.articulo.delete({
@@ -757,20 +752,15 @@ export class ArticulosService {
   }
 
   async getUnidades(organizacionId?: string) {
-    let orgId = organizacionId;
-    if (!orgId) {
-      const firstOrg = await this.prisma.organizacion.findFirst({ select: { id: true } });
-      orgId = firstOrg?.id;
-    }
-
-    if (!orgId) {
+    if (!organizacionId) {
       return this.prisma.unidadMedida.findMany({
+        where: { organizacionId: null },
         orderBy: { nombre: 'asc' },
       });
     }
 
     const org = await this.prisma.organizacion.findUnique({
-      where: { id: orgId },
+      where: { id: organizacionId },
     });
 
     if (!org) {
@@ -906,14 +896,22 @@ export class ArticulosService {
   }
 
   async getInventarioOverview(organizacionId: string, sucursalId?: string) {
-    let org = null;
-    if (organizacionId) {
-      org = await this.prisma.organizacion.findUnique({ where: { id: organizacionId } });
+    if (!organizacionId || organizacionId === 'default') {
+      return {
+        sucursales: [],
+        articulos: [],
+        resumen: { totalArticulos: 0, articulosConStockBajo: 0, articulosAgotados: 0, valorTotalInventario: 0 },
+      };
     }
+    const org = await this.prisma.organizacion.findUnique({ where: { id: organizacionId } });
     if (!org) {
-      org = await this.prisma.organizacion.findFirst();
+      return {
+        sucursales: [],
+        articulos: [],
+        resumen: { totalArticulos: 0, articulosConStockBajo: 0, articulosAgotados: 0, valorTotalInventario: 0 },
+      };
     }
-    const resolvedOrgId = org?.id || organizacionId;
+    const resolvedOrgId = org.id;
 
     const [sucursales, articulos] = await Promise.all([
       this.prisma.sucursal.findMany({
@@ -1088,14 +1086,14 @@ export class ArticulosService {
     motivo?: string;
     usuarioId?: string;
   }) {
-    let org = null;
-    if (dto.organizacionId) {
-      org = await this.prisma.organizacion.findUnique({ where: { id: dto.organizacionId } });
+    if (!dto.organizacionId || dto.organizacionId === 'default') {
+      throw new BadRequestException('El ID de organización es requerido');
     }
+    const org = await this.prisma.organizacion.findUnique({ where: { id: dto.organizacionId } });
     if (!org) {
-      org = await this.prisma.organizacion.findFirst();
+      throw new NotFoundException('Organización no encontrada');
     }
-    const resolvedOrgId = org?.id || dto.organizacionId;
+    const resolvedOrgId = org.id;
 
     let sucId = dto.sucursalId;
     if (!sucId) {
@@ -1199,14 +1197,14 @@ export class ArticulosService {
     organizacionId: string,
     params?: { articuloId?: string; sucursalId?: string; tipo?: string; limit?: number },
   ) {
-    let org = null;
-    if (organizacionId) {
-      org = await this.prisma.organizacion.findUnique({ where: { id: organizacionId } });
+    if (!organizacionId || organizacionId === 'default') {
+      return [];
     }
+    const org = await this.prisma.organizacion.findUnique({ where: { id: organizacionId } });
     if (!org) {
-      org = await this.prisma.organizacion.findFirst();
+      return [];
     }
-    const resolvedOrgId = org?.id || organizacionId;
+    const resolvedOrgId = org.id;
 
     const where: any = {
       articulo: { organizacionId: resolvedOrgId },

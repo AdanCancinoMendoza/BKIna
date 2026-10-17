@@ -8,6 +8,25 @@ async function bootstrap() {
 
   app.setGlobalPrefix('inagerlis');
 
+  // Habilitar 'trust proxy' para que Express reconozca correctamente las IPs reales detrás de Render / Cloudflare
+  const expressApp = app.getHttpAdapter().getInstance();
+  if (expressApp && typeof expressApp.set === 'function') {
+    expressApp.set('trust proxy', 1);
+  }
+
+  // Cabeceras HTTP de Seguridad Institucional (Anti-Clickjacking, MIME Sniffing, HSTS)
+  app.use((req: any, res: any, next: () => void) => {
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-XSS-Protection', '1; mode=block');
+    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+    res.setHeader(
+      'Strict-Transport-Security',
+      'max-age=31536000; includeSubDomains',
+    );
+    next();
+  });
+
   // Compresión HTTP Gzip/Deflate optimizada: reduce MB transferidos en más del 80% y acelera tiempos de respuesta en Render
   app.use(
     compression({

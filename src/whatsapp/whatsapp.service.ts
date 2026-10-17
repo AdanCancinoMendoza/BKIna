@@ -76,22 +76,38 @@ export class WhatsappService implements OnModuleInit, OnModuleDestroy {
   }
 
   private getSessionPath(organizacionId: string): string {
+    const cleanOrgId = (organizacionId || '').replace(/[^a-zA-Z0-9_-]/g, '');
+    if (!cleanOrgId) {
+      throw new BadRequestException('ID de organización inválido para la ruta de sesión');
+    }
     const baseDir = path.join(process.cwd(), 'whatsapp-sessions');
     if (!fs.existsSync(baseDir)) {
       fs.mkdirSync(baseDir, { recursive: true });
     }
-    return path.join(baseDir, `org_${organizacionId}`);
+    return path.join(baseDir, `org_${cleanOrgId}`);
   }
 
   async obtenerEstado(organizacionId: string) {
-    let org = null;
-    if (organizacionId && organizacionId !== 'default') {
-      org = await this.prisma.organizacion.findUnique({ where: { id: organizacionId } });
+    if (!organizacionId || organizacionId === 'default') {
+      return {
+        organizacionId: '',
+        estado: 'DESCONECTADO',
+        qrCode: null,
+        info: null,
+        numeroGuardado: null,
+      };
     }
+    const org = await this.prisma.organizacion.findUnique({ where: { id: organizacionId } });
     if (!org) {
-      org = await this.prisma.organizacion.findFirst();
+      return {
+        organizacionId,
+        estado: 'DESCONECTADO',
+        qrCode: null,
+        info: null,
+        numeroGuardado: null,
+      };
     }
-    const resolvedOrgId = org?.id || organizacionId;
+    const resolvedOrgId = org.id;
 
     const session = this.sessions.get(resolvedOrgId);
 
@@ -116,14 +132,14 @@ export class WhatsappService implements OnModuleInit, OnModuleDestroy {
   }
 
   async iniciarConexion(organizacionId: string) {
-    let org = null;
-    if (organizacionId && organizacionId !== 'default') {
-      org = await this.prisma.organizacion.findUnique({ where: { id: organizacionId } });
+    if (!organizacionId || organizacionId === 'default') {
+      throw new BadRequestException('El ID de organización es requerido');
     }
+    const org = await this.prisma.organizacion.findUnique({ where: { id: organizacionId } });
     if (!org) {
-      org = await this.prisma.organizacion.findFirst();
+      throw new NotFoundException('Organización no encontrada');
     }
-    const resolvedOrgId = org?.id || organizacionId;
+    const resolvedOrgId = org.id;
 
     // Si ya está conectado, devolver el estado actual sin reiniciar conexión
     const actual = this.sessions.get(resolvedOrgId);
@@ -292,14 +308,14 @@ export class WhatsappService implements OnModuleInit, OnModuleDestroy {
   }
 
   async desconectar(organizacionId: string) {
-    let org = null;
-    if (organizacionId && organizacionId !== 'default') {
-      org = await this.prisma.organizacion.findUnique({ where: { id: organizacionId } });
+    if (!organizacionId || organizacionId === 'default') {
+      throw new BadRequestException('El ID de organización es requerido');
     }
+    const org = await this.prisma.organizacion.findUnique({ where: { id: organizacionId } });
     if (!org) {
-      org = await this.prisma.organizacion.findFirst();
+      throw new NotFoundException('Organización no encontrada');
     }
-    const resolvedOrgId = org?.id || organizacionId;
+    const resolvedOrgId = org.id;
 
     const session = this.sessions.get(resolvedOrgId);
     if (session?.sock) {
@@ -339,14 +355,14 @@ export class WhatsappService implements OnModuleInit, OnModuleDestroy {
   }
 
   async enviarMensaje(organizacionId: string, telefono: string, texto: string) {
-    let org = null;
-    if (organizacionId && organizacionId !== 'default') {
-      org = await this.prisma.organizacion.findUnique({ where: { id: organizacionId } });
+    if (!organizacionId || organizacionId === 'default') {
+      throw new BadRequestException('El ID de organización es requerido');
     }
+    const org = await this.prisma.organizacion.findUnique({ where: { id: organizacionId } });
     if (!org) {
-      org = await this.prisma.organizacion.findFirst();
+      throw new NotFoundException('Organización no encontrada');
     }
-    const resolvedOrgId = org?.id || organizacionId;
+    const resolvedOrgId = org.id;
 
     const session = this.sessions.get(resolvedOrgId);
     if (!session || session.estado !== 'CONECTADO' || !session.sock) {
@@ -388,14 +404,14 @@ export class WhatsappService implements OnModuleInit, OnModuleDestroy {
     articuloNombre?: string;
     articuloPrecio?: number;
   }) {
-    let org = null;
-    if (data.organizacionId && data.organizacionId !== 'default') {
-      org = await this.prisma.organizacion.findUnique({ where: { id: data.organizacionId } });
+    if (!data.organizacionId || data.organizacionId === 'default') {
+      throw new BadRequestException('El ID de organización es requerido');
     }
+    const org = await this.prisma.organizacion.findUnique({ where: { id: data.organizacionId } });
     if (!org) {
-      org = await this.prisma.organizacion.findFirst();
+      throw new NotFoundException('Organización no encontrada');
     }
-    const resolvedOrgId = org?.id || data.organizacionId;
+    const resolvedOrgId = org.id;
 
     const session = this.sessions.get(resolvedOrgId);
     if (!session || session.estado !== 'CONECTADO' || !session.sock) {

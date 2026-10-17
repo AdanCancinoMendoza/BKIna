@@ -9,6 +9,7 @@ import bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { LoginDto, LoginPerfilDto } from './dto/login.dto.js';
 import { CreateUsuarioDto, UpdateUsuarioDto } from './dto/create-usuario.dto.js';
+import { SessionAnalyticsService } from '../common/services/session-analytics.service.js';
 
 @Injectable()
 export class UsuariosService {
@@ -71,6 +72,12 @@ export class UsuariosService {
     if (!passwordValida) {
       throw new UnauthorizedException('Credenciales incorrectas');
     }
+
+    SessionAnalyticsService.registrarLogin({
+      organizacionId: usuario.organizacionId,
+      usuarioId: usuario.id,
+      usuarioEmail: usuario.email,
+    });
 
     return {
       mensaje: 'Inicio de sesión exitoso',
@@ -146,6 +153,12 @@ export class UsuariosService {
     if (!credencialValida) {
       throw new UnauthorizedException('Contraseña o PIN incorrecto');
     }
+
+    SessionAnalyticsService.registrarLogin({
+      organizacionId: usuario.organizacionId,
+      usuarioId: usuario.id,
+      usuarioEmail: usuario.email,
+    });
 
     return {
       mensaje: 'Acceso de perfil correcto',
@@ -223,7 +236,20 @@ export class UsuariosService {
         perfilId: true,
         createdAt: true,
         updatedAt: true,
-        organizacion: true,
+        organizacion: {
+          select: {
+            id: true,
+            nombre: true,
+            email: true,
+            telefono: true,
+            rfc: true,
+            direccion: true,
+            logo: true,
+            temaId: true,
+            colorPrimario: true,
+            colorSecundario: true,
+          },
+        },
         sucursal: true,
         perfil: true,
       },

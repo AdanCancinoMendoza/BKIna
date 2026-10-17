@@ -34,9 +34,18 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     @ConnectedSocket() client: Socket,
     @MessageBody() data: { room: string },
   ) {
-    client.join(data.room);
-    this.logger.log(`Cliente ${client.id} se unió a la sala: ${data.room}`);
-    return { status: 'joined', room: data.room };
+    if (!data?.room || typeof data.room !== 'string') {
+      return { status: 'error', message: 'Nombre de sala no válido' };
+    }
+    const cleanRoom = data.room.trim();
+    if (!/^[a-zA-Z0-9_\-:]+$/.test(cleanRoom)) {
+      this.logger.warn(`Intento de unión a sala con formato no permitido: ${data.room} desde ${client.id}`);
+      return { status: 'rejected', message: 'Formato de sala inválido' };
+    }
+
+    client.join(cleanRoom);
+    this.logger.log(`Cliente ${client.id} se unió de forma segura a la sala: ${cleanRoom}`);
+    return { status: 'joined', room: cleanRoom };
   }
 
   private safeEmit(event: string, data: any, room?: string) {
@@ -46,10 +55,10 @@ export class EventsGateway implements OnGatewayConnection, OnGatewayDisconnect {
       const targetRoom = room || (orgId ? `org_${orgId}` : undefined);
 
       if (targetRoom) {
+        // Enviar EXCLUSIVAMENTE a la sala de la organización para evitar fuga transversal de datos
         this.server.to(targetRoom).emit(event, data);
-        // También emitir a sala global para clientes legacy o globales
-        this.server.emit(event, data);
       } else {
+        // Evento global del sistema sin pertenencia a organización
         this.server.emit(event, data);
       }
     } catch (err) {
